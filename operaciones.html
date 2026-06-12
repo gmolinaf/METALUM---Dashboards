@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Operaciones · GreenTrack</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0d0c; --surface: #121614; --surface2: #1a1f1d; --border: #232927;
+    --green: #1D9E75; --green-bright: #26C48E;
+    --text: #E8EDEB; --text2: #8B9591; --text3: #5A6360;
+    --blue: #6BA4F5; --amber: #F59E0B; --purple: #A78BFA; --red: #E5685F;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--blue), #4A7FD4); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .brand-text h1 { font-size: 15px; font-weight: 600; }
+  .brand-text p { font-size: 11px; color: var(--text2); }
+  .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-bright); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 4px; }
+  nav a { padding: 12px 16px; font-size: 13px; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  nav a.active { color: var(--blue); border-bottom-color: var(--blue); }
+  nav a:hover { color: var(--text); }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; }
+  .filter-group label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  select, input[type=date] { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text); outline: none; min-width: 130px; cursor: pointer; }
+  select:focus, input:focus { border-color: var(--blue); }
+  .btn-filter { background: var(--blue); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .btn-reset { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
+  .kpi.green::before { background: var(--green); }
+  .kpi.blue::before { background: var(--blue); }
+  .kpi.amber::before { background: var(--amber); }
+  .kpi.purple::before { background: var(--purple); }
+  .kpi-label { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .kpi-value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi-unit { font-size: 14px; color: var(--text3); font-weight: 400; }
+  .kpi-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .grid { display: grid; gap: 16px; margin-bottom: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 2fr 1fr; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+  .card-title span.sub { font-size: 11px; color: var(--text3); font-weight: 400; }
+  .chart-box { position: relative; height: 280px; }
+  .chart-box.tall { height: 320px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  td { font-size: 13px; padding: 11px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .loading { text-align: center; padding: 60px; color: var(--text3); font-size: 14px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-nac { background: rgba(38,196,142,0.15); color: var(--green-bright); }
+  .badge-int { background: rgba(107,164,245,0.15); color: var(--blue); }
+  .pill { font-family: monospace; background: var(--surface2); padding: 2px 8px; border-radius: 5px; font-size: 12px; }
+  @media (max-width: 1000px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">📊</div>
+    <div class="brand-text"><h1>GreenTrack</h1><p>Dashboard de Operaciones</p></div>
+  </div>
+  <div class="live"><span class="live-dot"></span><span id="live-text">En vivo</span></div>
+</header>
+
+<nav>
+  <a href="produccion.html">Producción</a>
+  <a href="#" class="active">Operaciones</a>
+  <a href="comercial.html">Comercial</a>
+</nav>
+
+<div class="container">
+
+  <div class="filters">
+    <div class="filter-group"><label>Desde</label><input type="date" id="f-desde"/></div>
+    <div class="filter-group"><label>Hasta</label><input type="date" id="f-hasta"/></div>
+    <div class="filter-group"><label>Bodega origen</label>
+      <select id="f-bodega"><option value="">Todas</option><option>Renca</option><option>Maipú</option><option>La Pintana</option><option>Talcahuano</option></select>
+    </div>
+    <div class="filter-group"><label>Material</label>
+      <select id="f-material"><option value="">Todos</option><option value="CU">Cobre</option><option value="AL">Aluminio</option><option value="FE">Fierro</option><option value="PP">Plástico</option><option value="PA">Papel</option></select>
+    </div>
+    <div class="filter-group"><label>Tipo despacho</label>
+      <select id="f-tipo"><option value="">Todos</option><option>Nacional</option><option>Internacional</option></select>
+    </div>
+    <button class="btn-filter" onclick="aplicarFiltros()">Aplicar</button>
+    <button class="btn-reset" onclick="resetFiltros()">Limpiar</button>
+  </div>
+
+  <div class="kpis" id="kpis"><div class="loading">Cargando...</div></div>
+
+  <!-- Producción vs Despacho en el tiempo -->
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Producción vs Despacho <span class="sub">kg por día</span></div>
+      <div class="chart-box tall"><canvas id="chartFlujo"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Despachos por tipo + por destino -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Despachos por tipo <span class="sub">nacional vs internacional</span></div>
+      <div class="chart-box"><canvas id="chartTipo"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Despachos por destino <span class="sub">kg</span></div>
+      <div class="chart-box"><canvas id="chartDestino"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Stock por bodega + por material -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Stock disponible por bodega <span class="sub">kg en inventario</span></div>
+      <div class="chart-box"><canvas id="chartStockBodega"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Stock por material <span class="sub">kg disponible</span></div>
+      <div class="chart-box"><canvas id="chartStockMaterial"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Últimos despachos -->
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Últimos despachos <span class="sub">por tanda / camión</span></div>
+      <table id="tablaDespachos">
+        <thead><tr><th>Fecha</th><th>Origen → Destino</th><th>Patente</th><th>Transportista</th><th>Tipo</th><th>Fardos</th><th>Kilos</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const URL_SB = 'https://zcjjgpamuszekiomygqz.supabase.co';
+const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjampncGFtdXN6ZWtpb215Z3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzA2NjYsImV4cCI6MjA5NjYwNjY2Nn0.3_WEmxpwPs6svbcrw1cS6C7Bc-N64PBoq9aoXxICwi4';
+const H = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
+const MAT_NOMBRE = { CU: 'Cobre', AL: 'Aluminio', FE: 'Fierro', PP: 'Plástico', PA: 'Papel' };
+const COLORS = { CU: '#C77B47', AL: '#7B97AD', FE: '#9B7B6B', PP: '#6B9B8A', PA: '#A89B6B' };
+
+let charts = {};
+Chart.defaults.color = '#8B9591';
+Chart.defaults.borderColor = '#232927';
+
+async function fetchSB(query) {
+  const r = await fetch(URL_SB + '/rest/v1/' + query, { headers: H });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function cargarTabla(tabla, select, filtros = {}) {
+  let all = [];
+  let offset = 0;
+  const limit = 1000;
+  let hayMas = true;
+  let q = `${tabla}?select=${select}`;
+  if (filtros.desde) q += `&timestamp=gte.${filtros.desde}T00:00:00`;
+  if (filtros.hasta) q += `&timestamp=lte.${filtros.hasta}T23:59:59`;
+  if (filtros.bodega) q += `&${tabla==='despachos'?'origen':'bodega'}=eq.${encodeURIComponent(filtros.bodega)}`;
+  if (filtros.material) q += `&material_code=eq.${filtros.material}`;
+  if (filtros.tipo && tabla==='despachos') q += `&tipo_despacho=eq.${filtros.tipo}`;
+  while (hayMas) {
+    const data = await fetchSB(`${q}&order=timestamp.asc&limit=${limit}&offset=${offset}`);
+    all = all.concat(data);
+    if (data.length < limit) hayMas = false;
+    else offset += limit;
+  }
+  return all;
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
+function destruir() { Object.values(charts).forEach(c => c && c.destroy()); charts = {}; }
+
+function renderKPIs(produccion, despachos, stock) {
+  const kgProd = produccion.reduce((a,r) => a + Number(r.peso||0), 0);
+  const kgDesp = despachos.reduce((a,r) => a + Number(r.peso||0), 0);
+  const kgStock = stock.reduce((a,r) => a + Number(r.peso||0), 0);
+  const tandas = new Set(despachos.map(d => d.patente + '|' + d.timestamp.split('T')[0])).size;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi green"><div class="kpi-label">Producido</div><div class="kpi-value">${fmt(kgProd/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(produccion.length)} fardos</div></div>
+    <div class="kpi blue"><div class="kpi-label">Despachado</div><div class="kpi-value">${fmt(kgDesp/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(despachos.length)} fardos · ${tandas} viajes</div></div>
+    <div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">${fmt(kgStock/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(stock.length)} fardos en bodega</div></div>
+    <div class="kpi purple"><div class="kpi-label">Rotación</div><div class="kpi-value">${kgProd?((kgDesp/kgProd)*100).toFixed(0):0}<span class="kpi-unit">%</span></div><div class="kpi-sub">despachado / producido</div></div>
+  `;
+}
+
+function renderFlujo(produccion, despachos) {
+  const prodDia = {}, despDia = {};
+  produccion.forEach(r => { const d = r.timestamp.split('T')[0]; prodDia[d] = (prodDia[d]||0) + Number(r.peso||0); });
+  despachos.forEach(r => { const d = r.timestamp.split('T')[0]; despDia[d] = (despDia[d]||0) + Number(r.peso||0); });
+  const dias = [...new Set([...Object.keys(prodDia), ...Object.keys(despDia)])].sort();
+  const labels = dias.map(d => { const [y,m,dd]=d.split('-'); return `${dd}/${m}`; });
+
+  charts.flujo = new Chart(document.getElementById('chartFlujo'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Producción', data: dias.map(d=>prodDia[d]||0), borderColor: '#26C48E', backgroundColor: 'rgba(38,196,142,0.06)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+      { label: 'Despacho', data: dias.map(d=>despDia[d]||0), borderColor: '#6BA4F5', backgroundColor: 'rgba(107,164,245,0.06)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 14, font: {size:10} } }, y: { grid: { color: '#1a1f1d' }, ticks: { callback: v => (v/1000).toFixed(0)+'k' } } }
+    }
+  });
+}
+
+function renderTipo(despachos) {
+  const porTipo = {};
+  despachos.forEach(r => { porTipo[r.tipo_despacho] = (porTipo[r.tipo_despacho]||0) + Number(r.peso||0); });
+  charts.tipo = new Chart(document.getElementById('chartTipo'), {
+    type: 'doughnut',
+    data: { labels: Object.keys(porTipo), datasets: [{ data: Object.values(porTipo), backgroundColor: ['#26C48E','#6BA4F5'], borderColor: '#121614', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 14 } } }, cutout: '62%' }
+  });
+}
+
+function renderDestino(despachos) {
+  const porDest = {};
+  despachos.forEach(r => { porDest[r.destino] = (porDest[r.destino]||0) + Number(r.peso||0); });
+  const dests = Object.keys(porDest).sort((a,b)=>porDest[b]-porDest[a]);
+  charts.destino = new Chart(document.getElementById('chartDestino'), {
+    type: 'bar',
+    data: { labels: dests, datasets: [{ data: dests.map(d=>porDest[d]), backgroundColor: '#6BA4F5', borderRadius: 6, barThickness: 34 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1a1f1d' }, ticks: { callback: v=>(v/1000).toFixed(0)+'k' } }, y: { grid: { display: false } } } }
+  });
+}
+
+function renderStockBodega(stock) {
+  const porBod = {};
+  stock.forEach(r => { porBod[r.bodega] = (porBod[r.bodega]||0) + Number(r.peso||0); });
+  const bods = Object.keys(porBod).sort((a,b)=>porBod[b]-porBod[a]);
+  charts.stockBodega = new Chart(document.getElementById('chartStockBodega'), {
+    type: 'bar',
+    data: { labels: bods, datasets: [{ data: bods.map(b=>porBod[b]), backgroundColor: '#F59E0B', borderRadius: 6, barThickness: 44 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#1a1f1d' }, ticks: { callback: v=>(v/1000).toFixed(0)+'k' } } } }
+  });
+}
+
+function renderStockMaterial(stock) {
+  const porMat = {};
+  stock.forEach(r => { porMat[r.material_code] = (porMat[r.material_code]||0) + Number(r.peso||0); });
+  const mats = Object.keys(porMat);
+  charts.stockMaterial = new Chart(document.getElementById('chartStockMaterial'), {
+    type: 'doughnut',
+    data: { labels: mats.map(m=>MAT_NOMBRE[m]), datasets: [{ data: mats.map(m=>porMat[m]), backgroundColor: mats.map(m=>COLORS[m]), borderColor: '#121614', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12 } } }, cutout: '60%' }
+  });
+}
+
+function renderTablaDespachos(despachos) {
+  // Agrupar por tanda (patente + fecha + hora)
+  const tandas = {};
+  despachos.forEach(d => {
+    const key = d.patente + '|' + d.timestamp;
+    if (!tandas[key]) tandas[key] = { ...d, fardos: 0, kilos: 0 };
+    tandas[key].fardos++;
+    tandas[key].kilos += Number(d.peso||0);
+  });
+  const lista = Object.values(tandas).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 15);
+  document.querySelector('#tablaDespachos tbody').innerHTML = lista.map(d => {
+    const dt = new Date(d.timestamp);
+    const fecha = dt.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    const badgeClass = d.tipo_despacho === 'Nacional' ? 'badge-nac' : 'badge-int';
+    return `<tr>
+      <td>${fecha}</td>
+      <td>${d.origen} → ${d.destino}</td>
+      <td><span class="pill">${d.patente}</span></td>
+      <td>${d.transportista}</td>
+      <td><span class="badge ${badgeClass}">${d.tipo_despacho}</span></td>
+      <td>${d.fardos}</td>
+      <td>${fmt(d.kilos)} kg</td>
+    </tr>`;
+  }).join('');
+}
+
+async function renderTodo(filtros) {
+  destruir();
+  // Producción y despachos respetan filtros; stock siempre es global (despachado=false)
+  const produccion = await cargarTabla('pesaje_data', 'peso,material_code,bodega,timestamp', filtros);
+  const despachos = await cargarTabla('despachos', 'peso,material_code,origen,destino,tipo_despacho,patente,transportista,timestamp', filtros);
+  let stockFiltros = { bodega: filtros.bodega, material: filtros.material };
+  const stock = await cargarStock(stockFiltros);
+
+  renderKPIs(produccion, despachos, stock);
+  renderFlujo(produccion, despachos);
+  renderTipo(despachos);
+  renderDestino(despachos);
+  renderStockBodega(stock);
+  renderStockMaterial(stock);
+  renderTablaDespachos(despachos);
+}
+
+async function cargarStock(filtros = {}) {
+  let all = [];
+  let offset = 0;
+  const limit = 1000;
+  let hayMas = true;
+  let q = `pesaje_data?select=peso,material_code,bodega&despachado=eq.false`;
+  if (filtros.bodega) q += `&bodega=eq.${encodeURIComponent(filtros.bodega)}`;
+  if (filtros.material) q += `&material_code=eq.${filtros.material}`;
+  while (hayMas) {
+    const data = await fetchSB(`${q}&limit=${limit}&offset=${offset}`);
+    all = all.concat(data);
+    if (data.length < limit) hayMas = false;
+    else offset += limit;
+  }
+  return all;
+}
+
+function getFiltros() {
+  return {
+    desde: document.getElementById('f-desde').value,
+    hasta: document.getElementById('f-hasta').value,
+    bodega: document.getElementById('f-bodega').value,
+    material: document.getElementById('f-material').value,
+    tipo: document.getElementById('f-tipo').value
+  };
+}
+
+async function aplicarFiltros() {
+  document.getElementById('live-text').textContent = 'Cargando...';
+  try { await renderTodo(getFiltros()); document.getElementById('live-text').textContent = 'Actualizado'; }
+  catch(e) { document.getElementById('live-text').textContent = 'Error'; console.error(e); }
+}
+
+function resetFiltros() {
+  ['f-desde','f-hasta','f-bodega','f-material','f-tipo'].forEach(id => document.getElementById(id).value='');
+  aplicarFiltros();
+}
+
+async function init() {
+  try { await renderTodo({}); document.getElementById('live-text').textContent = 'En vivo'; }
+  catch(e) { document.getElementById('kpis').innerHTML = '<div class="loading">Error: '+e.message+'</div>'; console.error(e); }
+}
+init();
+</script>
+</body>
+</html>

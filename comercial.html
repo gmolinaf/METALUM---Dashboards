@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Comercial · GreenTrack</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0d0c; --surface: #121614; --surface2: #1a1f1d; --border: #232927;
+    --green: #1D9E75; --green-bright: #26C48E;
+    --text: #E8EDEB; --text2: #8B9591; --text3: #5A6360;
+    --gold: #D4AF37;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--gold), #B8941F); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .brand-text h1 { font-size: 15px; font-weight: 600; }
+  .brand-text p { font-size: 11px; color: var(--text2); }
+  .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-bright); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 4px; }
+  nav a { padding: 12px 16px; font-size: 13px; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  nav a.active { color: var(--gold); border-bottom-color: var(--gold); }
+  nav a:hover { color: var(--text); }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .hero-stock { background: linear-gradient(135deg, var(--surface), var(--surface2)); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+  .hero-main h2 { font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .hero-main .big { font-size: 54px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .hero-main .big span { font-size: 24px; color: var(--text3); }
+  .hero-main .sub { font-size: 14px; color: var(--text2); margin-top: 6px; }
+  .hero-update { text-align: right; font-size: 12px; color: var(--text3); }
+  .cards-mat { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .mat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
+  .mat-card .dot { width: 12px; height: 12px; border-radius: 50%; margin-bottom: 12px; }
+  .mat-card .name { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+  .mat-card .kg { font-size: 26px; font-weight: 700; }
+  .mat-card .kg span { font-size: 13px; color: var(--text3); font-weight: 400; }
+  .mat-card .fardos { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .mat-card .pct-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+  .mat-card .pct-fill { height: 100%; border-radius: 2px; }
+  .grid { display: grid; gap: 16px; margin-bottom: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; }
+  .card-title span.sub { font-size: 11px; color: var(--text3); font-weight: 400; }
+  .chart-box { position: relative; height: 300px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  td { font-size: 13px; padding: 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .mat-tag { display: inline-flex; align-items: center; gap: 6px; }
+  .mat-tag .d { width: 8px; height: 8px; border-radius: 50%; }
+  .loading { text-align: center; padding: 60px; color: var(--text3); }
+  .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; }
+  .filter-group label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  select, input[type=date] { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text); outline: none; min-width: 130px; }
+  .btn-filter { background: var(--gold); color: #1a1a1a; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-reset { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer; }
+  @media (max-width: 1000px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">💰</div>
+    <div class="brand-text"><h1>GreenTrack</h1><p>Dashboard Comercial</p></div>
+  </div>
+  <div class="live"><span class="live-dot"></span><span id="live-text">En vivo</span></div>
+</header>
+
+<nav>
+  <a href="produccion.html">Producción</a>
+  <a href="operaciones.html">Operaciones</a>
+  <a href="#" class="active">Comercial</a>
+</nav>
+
+<div class="container">
+
+  <!-- HERO STOCK TOTAL -->
+  <div class="hero-stock">
+    <div class="hero-main">
+      <h2>Stock total disponible para venta</h2>
+      <div class="big" id="stock-total">—<span> ton</span></div>
+      <div class="sub" id="stock-fardos">Cargando inventario...</div>
+    </div>
+    <div class="hero-update">
+      <div id="update-time">Actualizado ahora</div>
+    </div>
+  </div>
+
+  <!-- CARDS POR MATERIAL -->
+  <div class="cards-mat" id="cards-mat"></div>
+
+  <!-- Stock por bodega + volumen comercial -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Stock por bodega <span class="sub">disponible</span></div>
+      <div class="chart-box"><canvas id="chartBodega"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Volumen despachado <span class="sub">últimos 30 días, por material</span></div>
+      <div class="chart-box"><canvas id="chartVolumen"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Detalle stock por material y bodega -->
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Inventario detallado <span class="sub">material × bodega</span></div>
+      <table id="tablaStock">
+        <thead><tr><th>Material</th><th>Renca</th><th>Maipú</th><th>La Pintana</th><th>Talcahuano</th><th>Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const URL_SB = 'https://zcjjgpamuszekiomygqz.supabase.co';
+const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjampncGFtdXN6ZWtpb215Z3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzA2NjYsImV4cCI6MjA5NjYwNjY2Nn0.3_WEmxpwPs6svbcrw1cS6C7Bc-N64PBoq9aoXxICwi4';
+const H = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
+const MAT_NOMBRE = { CU: 'Cobre', AL: 'Aluminio', FE: 'Fierro', PP: 'Plástico', PA: 'Papel' };
+const COLORS = { CU: '#C77B47', AL: '#7B97AD', FE: '#9B7B6B', PP: '#6B9B8A', PA: '#A89B6B' };
+const BODEGAS = ['Renca', 'Maipú', 'La Pintana', 'Talcahuano'];
+
+let charts = {};
+Chart.defaults.color = '#8B9591';
+Chart.defaults.borderColor = '#232927';
+
+async function fetchSB(query) {
+  const r = await fetch(URL_SB + '/rest/v1/' + query, { headers: H });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function cargarPaginado(q) {
+  let all = [];
+  let offset = 0;
+  const limit = 1000;
+  let hayMas = true;
+  while (hayMas) {
+    const data = await fetchSB(`${q}&limit=${limit}&offset=${offset}`);
+    all = all.concat(data);
+    if (data.length < limit) hayMas = false;
+    else offset += limit;
+  }
+  all.forEach(r => { r.peso = Number(r.peso) || 0; });
+  return all;
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
+
+async function init() {
+  try {
+    // Stock = despachado false
+    const stock = await cargarPaginado('pesaje_data?select=peso,material_code,bodega&despachado=eq.false');
+    // Despachos últimos 30 días
+    const hace30 = new Date(Date.now() - 30*86400000).toISOString().split('T')[0];
+    const despachos = await cargarPaginado(`pesaje_data?select=peso,material_code&despachado=eq.true&timestamp=gte.${hace30}T00:00:00`);
+
+    renderHero(stock);
+    renderCardsMaterial(stock);
+    renderChartBodega(stock);
+    renderChartVolumen(despachos);
+    renderTablaStock(stock);
+
+    document.getElementById('live-text').textContent = 'En vivo';
+    document.getElementById('update-time').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
+  } catch(e) {
+    document.getElementById('stock-fardos').textContent = 'Error: ' + e.message;
+    console.error(e);
+  }
+}
+
+function renderHero(stock) {
+  const kg = stock.reduce((a,r) => a + r.peso, 0);
+  document.getElementById('stock-total').innerHTML = fmt(kg/1000) + '<span> ton</span>';
+  document.getElementById('stock-fardos').textContent = fmt(stock.length) + ' fardos disponibles en bodega';
+}
+
+function renderCardsMaterial(stock) {
+  const porMat = {};
+  stock.forEach(r => {
+    if (!porMat[r.material_code]) porMat[r.material_code] = { kg: 0, fardos: 0 };
+    porMat[r.material_code].kg += r.peso;
+    porMat[r.material_code].fardos++;
+  });
+  const totalKg = Object.values(porMat).reduce((a,m) => a + m.kg, 0);
+  const mats = Object.keys(porMat).sort((a,b) => porMat[b].kg - porMat[a].kg);
+
+  document.getElementById('cards-mat').innerHTML = mats.map(m => {
+    const pct = (porMat[m].kg / totalKg * 100).toFixed(0);
+    return `<div class="mat-card">
+      <div class="dot" style="background:${COLORS[m]}"></div>
+      <div class="name">${MAT_NOMBRE[m]}</div>
+      <div class="kg">${fmt(porMat[m].kg/1000)}<span> ton</span></div>
+      <div class="fardos">${fmt(porMat[m].fardos)} fardos · ${pct}%</div>
+      <div class="pct-bar"><div class="pct-fill" style="width:${pct}%;background:${COLORS[m]}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderChartBodega(stock) {
+  const porBod = {};
+  BODEGAS.forEach(b => porBod[b] = 0);
+  stock.forEach(r => { porBod[r.bodega] = (porBod[r.bodega]||0) + r.peso; });
+  charts.bodega = new Chart(document.getElementById('chartBodega'), {
+    type: 'bar',
+    data: { labels: BODEGAS, datasets: [{ data: BODEGAS.map(b=>porBod[b]), backgroundColor: '#D4AF37', borderRadius: 6, barThickness: 44 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#1a1f1d' }, ticks: { callback: v=>(v/1000).toFixed(0)+'k' } } } }
+  });
+}
+
+function renderChartVolumen(despachos) {
+  const porMat = {};
+  despachos.forEach(r => { porMat[r.material_code] = (porMat[r.material_code]||0) + r.peso; });
+  const mats = Object.keys(porMat).sort((a,b)=>porMat[b]-porMat[a]);
+  charts.volumen = new Chart(document.getElementById('chartVolumen'), {
+    type: 'doughnut',
+    data: { labels: mats.map(m=>MAT_NOMBRE[m]), datasets: [{ data: mats.map(m=>porMat[m]), backgroundColor: mats.map(m=>COLORS[m]), borderColor: '#121614', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12 } } }, cutout: '60%' }
+  });
+}
+
+function renderTablaStock(stock) {
+  const grid = {};
+  const materiales = ['CU','AL','FE','PP','PA'];
+  materiales.forEach(m => { grid[m] = { Renca:0, 'Maipú':0, 'La Pintana':0, Talcahuano:0 }; });
+  stock.forEach(r => {
+    if (grid[r.material_code]) grid[r.material_code][r.bodega] += r.peso;
+  });
+  document.querySelector('#tablaStock tbody').innerHTML = materiales.map(m => {
+    const fila = grid[m];
+    const total = BODEGAS.reduce((a,b) => a + fila[b], 0);
+    return `<tr>
+      <td><span class="mat-tag"><span class="d" style="background:${COLORS[m]}"></span>${MAT_NOMBRE[m]}</span></td>
+      <td>${fmt(fila['Renca']/1000)} t</td>
+      <td>${fmt(fila['Maipú']/1000)} t</td>
+      <td>${fmt(fila['La Pintana']/1000)} t</td>
+      <td>${fmt(fila['Talcahuano']/1000)} t</td>
+      <td style="font-weight:600;">${fmt(total/1000)} t</td>
+    </tr>`;
+  }).join('');
+}
+
+init();
+// Auto-refresh cada 60s para trading en tiempo real
+setInterval(init, 60000);
+</script>
+</body>
+</html>

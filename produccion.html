@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Producción · GreenTrack</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0d0c;
+    --surface: #121614;
+    --surface2: #1a1f1d;
+    --border: #232927;
+    --green: #1D9E75;
+    --green-bright: #26C48E;
+    --green-dim: #158065;
+    --text: #E8EDEB;
+    --text2: #8B9591;
+    --text3: #5A6360;
+    --cu: #C77B47;
+    --al: #7B97AD;
+    --fe: #9B7B6B;
+    --pp: #6B9B8A;
+    --pa: #A89B6B;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--green), var(--green-bright)); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .brand-text h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-text p { font-size: 11px; color: var(--text2); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-bright); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 4px; }
+  nav a { padding: 12px 16px; font-size: 13px; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  nav a.active { color: var(--green-bright); border-bottom-color: var(--green-bright); }
+  nav a:hover { color: var(--text); }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; }
+  .filter-group label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  select, input[type=date] { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text); outline: none; min-width: 130px; cursor: pointer; }
+  select:focus, input:focus { border-color: var(--green); }
+  .btn-filter { background: var(--green); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .btn-filter:hover { background: var(--green-bright); }
+  .btn-reset { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--green); }
+  .kpi-label { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .kpi-value { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi-unit { font-size: 14px; color: var(--text3); font-weight: 400; }
+  .kpi-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  .grid { display: grid; gap: 16px; margin-bottom: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 2fr 1fr; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+  .card-title span.sub { font-size: 11px; color: var(--text3); font-weight: 400; }
+  .chart-box { position: relative; height: 280px; }
+  .chart-box.tall { height: 320px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  td { font-size: 13px; padding: 11px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .rank { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--surface2); font-size: 11px; font-weight: 600; margin-right: 8px; }
+  .rank.gold { background: rgba(212,175,55,0.15); color: #D4AF37; }
+  .bar-mini { height: 6px; border-radius: 3px; background: var(--green); }
+
+  .loading { text-align: center; padding: 60px; color: var(--text3); font-size: 14px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-m { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .badge-t { background: rgba(59,130,246,0.15); color: #6BA4F5; }
+  .badge-n { background: rgba(139,92,246,0.15); color: #A78BFA; }
+
+  @media (max-width: 1000px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">🏭</div>
+    <div class="brand-text">
+      <h1>GreenTrack</h1>
+      <p>Dashboard de Producción</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live"><span class="live-dot"></span><span id="live-text">En vivo</span></div>
+  </div>
+</header>
+
+<nav>
+  <a href="#" class="active">Producción</a>
+  <a href="#" onclick="alert('Próximo dashboard');return false;">Operaciones</a>
+  <a href="#" onclick="alert('Próximo dashboard');return false;">Comercial</a>
+</nav>
+
+<div class="container">
+
+  <!-- FILTROS -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Desde</label>
+      <input type="date" id="f-desde"/>
+    </div>
+    <div class="filter-group">
+      <label>Hasta</label>
+      <input type="date" id="f-hasta"/>
+    </div>
+    <div class="filter-group">
+      <label>Bodega</label>
+      <select id="f-bodega">
+        <option value="">Todas</option>
+        <option>Renca</option><option>Maipú</option>
+        <option>La Pintana</option><option>Talcahuano</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Material</label>
+      <select id="f-material">
+        <option value="">Todos</option>
+        <option value="CU">Cobre</option><option value="AL">Aluminio</option>
+        <option value="FE">Fierro</option><option value="PP">Plástico</option>
+        <option value="PA">Papel</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Operador</label>
+      <select id="f-operador">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Máquina</label>
+      <select id="f-maquina">
+        <option value="">Todas</option>
+        <option>PRENSA-1</option><option>PRENSA-2</option><option>PRENSA-3</option>
+        <option>TRITURADORA-1</option><option>MANUAL</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Turno</label>
+      <select id="f-turno">
+        <option value="">Todos</option>
+        <option>Mañana</option><option>Tarde</option><option>Noche</option>
+      </select>
+    </div>
+    <button class="btn-filter" onclick="aplicarFiltros()">Aplicar</button>
+    <button class="btn-reset" onclick="resetFiltros()">Limpiar</button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis">
+    <div class="loading">Cargando datos...</div>
+  </div>
+
+  <!-- Producción en el tiempo -->
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="card-title">Producción diaria <span class="sub">kg por día</span></div>
+      <div class="chart-box tall"><canvas id="chartTiempo"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Por material <span class="sub">distribución</span></div>
+      <div class="chart-box tall"><canvas id="chartMaterial"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Turnos y máquinas -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Producción por turno <span class="sub">kg acumulado</span></div>
+      <div class="chart-box"><canvas id="chartTurno"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Rendimiento por máquina <span class="sub">kg total</span></div>
+      <div class="chart-box"><canvas id="chartMaquina"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Ranking operadores + bodegas -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Ranking de operadores <span class="sub">por producción</span></div>
+      <table id="tablaOperadores">
+        <thead><tr><th>Operador</th><th>Fardos</th><th>Kilos</th><th>Promedio</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Producción por bodega <span class="sub">kg total</span></div>
+      <div class="chart-box"><canvas id="chartBodega"></canvas></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const URL_SB = 'https://zcjjgpamuszekiomygqz.supabase.co';
+const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjampncGFtdXN6ZWtpb215Z3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzA2NjYsImV4cCI6MjA5NjYwNjY2Nn0.3_WEmxpwPs6svbcrw1cS6C7Bc-N64PBoq9aoXxICwi4';
+const H = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
+
+const COLORS = {
+  CU: '#C77B47', AL: '#7B97AD', FE: '#9B7B6B', PP: '#6B9B8A', PA: '#A89B6B'
+};
+const MAT_NOMBRE = { CU: 'Cobre', AL: 'Aluminio', FE: 'Fierro', PP: 'Plástico', PA: 'Papel' };
+
+let charts = {};
+let datosCompletos = [];
+
+// Chart.js defaults
+Chart.defaults.color = '#8B9591';
+Chart.defaults.borderColor = '#232927';
+Chart.defaults.font.family = "-apple-system, sans-serif";
+
+async function fetchSupabase(query) {
+  const r = await fetch(URL_SB + '/rest/v1/' + query, { headers: H });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// Traer TODOS los registros (paginado)
+async function cargarTodosLosDatos(filtros = {}) {
+  let allData = [];
+  let offset = 0;
+  const limit = 1000;
+  let hayMas = true;
+
+  let baseQuery = 'pesaje_data?select=peso,material_code,bodega,operador,maquina,turno,timestamp';
+
+  // Filtros
+  if (filtros.desde) baseQuery += `&timestamp=gte.${filtros.desde}T00:00:00`;
+  if (filtros.hasta) baseQuery += `&timestamp=lte.${filtros.hasta}T23:59:59`;
+  if (filtros.bodega) baseQuery += `&bodega=eq.${encodeURIComponent(filtros.bodega)}`;
+  if (filtros.material) baseQuery += `&material_code=eq.${filtros.material}`;
+  if (filtros.operador) baseQuery += `&operador=eq.${encodeURIComponent(filtros.operador)}`;
+  if (filtros.maquina) baseQuery += `&maquina=eq.${filtros.maquina}`;
+  if (filtros.turno) baseQuery += `&turno=eq.${filtros.turno}`;
+
+  while (hayMas) {
+    const data = await fetchSupabase(`${baseQuery}&order=timestamp.asc&limit=${limit}&offset=${offset}`);
+    allData = allData.concat(data);
+    if (data.length < limit) hayMas = false;
+    else offset += limit;
+  }
+  // Forzar peso a número (Supabase puede devolverlo como texto)
+  allData.forEach(r => { r.peso = Number(r.peso) || 0; });
+  return allData;
+}
+
+function formatNum(n) {
+  return n.toLocaleString('es-CL');
+}
+
+function destruirCharts() {
+  Object.values(charts).forEach(c => { if (c) c.destroy(); });
+  charts = {};
+}
+
+function renderKPIs(data) {
+  const totalFardos = data.length;
+  const totalKilos = data.reduce((a, r) => a + (r.peso || 0), 0);
+  const promedio = totalFardos ? Math.round(totalKilos / totalFardos) : 0;
+
+  // Días únicos
+  const dias = new Set(data.map(r => r.timestamp.split('T')[0]));
+  const promedioDiario = dias.size ? Math.round(totalKilos / dias.size) : 0;
+
+  // Material top
+  const porMaterial = {};
+  data.forEach(r => { porMaterial[r.material_code] = (porMaterial[r.material_code] || 0) + r.peso; });
+  const matTop = Object.entries(porMaterial).sort((a,b) => b[1]-a[1])[0];
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Producción total</div>
+      <div class="kpi-value">${formatNum(totalKilos)} <span class="kpi-unit">kg</span></div>
+      <div class="kpi-sub">${formatNum(totalFardos)} fardos</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Promedio por fardo</div>
+      <div class="kpi-value">${formatNum(promedio)} <span class="kpi-unit">kg</span></div>
+      <div class="kpi-sub">por unidad</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Promedio diario</div>
+      <div class="kpi-value">${formatNum(promedioDiario)} <span class="kpi-unit">kg</span></div>
+      <div class="kpi-sub">${dias.size} días con producción</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Material principal</div>
+      <div class="kpi-value">${matTop ? MAT_NOMBRE[matTop[0]] : '—'}</div>
+      <div class="kpi-sub">${matTop ? formatNum(matTop[1]) + ' kg' : ''}</div>
+    </div>
+  `;
+}
+
+function renderChartTiempo(data) {
+  // Agrupar por día
+  const porDia = {};
+  data.forEach(r => {
+    const dia = r.timestamp.split('T')[0];
+    porDia[dia] = (porDia[dia] || 0) + r.peso;
+  });
+  const dias = Object.keys(porDia).sort();
+  const valores = dias.map(d => porDia[d]);
+  const labels = dias.map(d => {
+    const [y,m,dd] = d.split('-');
+    return `${dd}/${m}`;
+  });
+
+  charts.tiempo = new Chart(document.getElementById('chartTiempo'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: valores,
+        borderColor: '#26C48E',
+        backgroundColor: 'rgba(38,196,142,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+        y: { grid: { color: '#1a1f1d' }, ticks: { callback: v => (v/1000).toFixed(0) + 'k' } }
+      }
+    }
+  });
+}
+
+function renderChartMaterial(data) {
+  const porMaterial = {};
+  data.forEach(r => { porMaterial[r.material_code] = (porMaterial[r.material_code] || 0) + r.peso; });
+  const mats = Object.keys(porMaterial);
+
+  charts.material = new Chart(document.getElementById('chartMaterial'), {
+    type: 'doughnut',
+    data: {
+      labels: mats.map(m => MAT_NOMBRE[m]),
+      datasets: [{
+        data: mats.map(m => porMaterial[m]),
+        backgroundColor: mats.map(m => COLORS[m]),
+        borderColor: '#121614',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 12, font: { size: 11 }, usePointStyle: true } }
+      },
+      cutout: '60%'
+    }
+  });
+}
+
+function renderChartTurno(data) {
+  const porTurno = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
+  data.forEach(r => { porTurno[r.turno] = (porTurno[r.turno] || 0) + r.peso; });
+
+  charts.turno = new Chart(document.getElementById('chartTurno'), {
+    type: 'bar',
+    data: {
+      labels: ['Mañana', 'Tarde', 'Noche'],
+      datasets: [{
+        data: [porTurno['Mañana'], porTurno['Tarde'], porTurno['Noche']],
+        backgroundColor: ['#F59E0B', '#6BA4F5', '#A78BFA'],
+        borderRadius: 8,
+        barThickness: 60
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: '#1a1f1d' }, ticks: { callback: v => (v/1000).toFixed(0) + 'k' } }
+      }
+    }
+  });
+}
+
+function renderChartMaquina(data) {
+  const porMaquina = {};
+  data.forEach(r => { porMaquina[r.maquina] = (porMaquina[r.maquina] || 0) + r.peso; });
+  const maquinas = Object.keys(porMaquina).sort((a,b) => porMaquina[b]-porMaquina[a]);
+
+  charts.maquina = new Chart(document.getElementById('chartMaquina'), {
+    type: 'bar',
+    data: {
+      labels: maquinas,
+      datasets: [{
+        data: maquinas.map(m => porMaquina[m]),
+        backgroundColor: '#1D9E75',
+        borderRadius: 6,
+        barThickness: 32
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1a1f1d' }, ticks: { callback: v => (v/1000).toFixed(0) + 'k' } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderChartBodega(data) {
+  const porBodega = {};
+  data.forEach(r => { porBodega[r.bodega] = (porBodega[r.bodega] || 0) + r.peso; });
+  const bodegas = Object.keys(porBodega).sort((a,b) => porBodega[b]-porBodega[a]);
+
+  charts.bodega = new Chart(document.getElementById('chartBodega'), {
+    type: 'bar',
+    data: {
+      labels: bodegas,
+      datasets: [{
+        data: bodegas.map(b => porBodega[b]),
+        backgroundColor: ['#1D9E75', '#26C48E', '#15806A', '#1FB387'],
+        borderRadius: 6,
+        barThickness: 40
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: '#1a1f1d' }, ticks: { callback: v => (v/1000).toFixed(0) + 'k' } }
+      }
+    }
+  });
+}
+
+function renderTablaOperadores(data) {
+  const porOp = {};
+  data.forEach(r => {
+    if (!porOp[r.operador]) porOp[r.operador] = { fardos: 0, kilos: 0 };
+    porOp[r.operador].fardos++;
+    porOp[r.operador].kilos += r.peso;
+  });
+  const ops = Object.entries(porOp).sort((a,b) => b[1].kilos - a[1].kilos);
+  const maxKilos = ops.length ? ops[0][1].kilos : 1;
+
+  const tbody = document.querySelector('#tablaOperadores tbody');
+  tbody.innerHTML = ops.map(([nombre, d], i) => {
+    const prom = Math.round(d.kilos / d.fardos);
+    const pct = (d.kilos / maxKilos * 100).toFixed(0);
+    return `<tr>
+      <td><span class="rank ${i===0?'gold':''}">${i+1}</span>${nombre}</td>
+      <td>${formatNum(d.fardos)}</td>
+      <td>${formatNum(d.kilos)} kg</td>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div class="bar-mini" style="width:${pct}%;max-width:60px;"></div>
+        <span style="font-size:12px;color:var(--text3);">${formatNum(prom)}</span>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function cargarOperadoresEnFiltro(data) {
+  const operadores = [...new Set(data.map(r => r.operador))].sort();
+  const select = document.getElementById('f-operador');
+  const valorActual = select.value;
+  select.innerHTML = '<option value="">Todos</option>' +
+    operadores.map(o => `<option>${o}</option>`).join('');
+  select.value = valorActual;
+}
+
+async function renderTodo(data) {
+  destruirCharts();
+  renderKPIs(data);
+  renderChartTiempo(data);
+  renderChartMaterial(data);
+  renderChartTurno(data);
+  renderChartMaquina(data);
+  renderChartBodega(data);
+  renderTablaOperadores(data);
+}
+
+function getFiltros() {
+  return {
+    desde: document.getElementById('f-desde').value,
+    hasta: document.getElementById('f-hasta').value,
+    bodega: document.getElementById('f-bodega').value,
+    material: document.getElementById('f-material').value,
+    operador: document.getElementById('f-operador').value,
+    maquina: document.getElementById('f-maquina').value,
+    turno: document.getElementById('f-turno').value
+  };
+}
+
+async function aplicarFiltros() {
+  document.getElementById('live-text').textContent = 'Cargando...';
+  try {
+    const data = await cargarTodosLosDatos(getFiltros());
+    await renderTodo(data);
+    document.getElementById('live-text').textContent = 'Actualizado';
+  } catch (e) {
+    document.getElementById('live-text').textContent = 'Error';
+    console.error(e);
+  }
+}
+
+function resetFiltros() {
+  document.getElementById('f-desde').value = '';
+  document.getElementById('f-hasta').value = '';
+  document.getElementById('f-bodega').value = '';
+  document.getElementById('f-material').value = '';
+  document.getElementById('f-operador').value = '';
+  document.getElementById('f-maquina').value = '';
+  document.getElementById('f-turno').value = '';
+  aplicarFiltros();
+}
+
+// Init
+async function init() {
+  try {
+    const data = await cargarTodosLosDatos();
+    datosCompletos = data;
+    cargarOperadoresEnFiltro(data);
+    await renderTodo(data);
+    document.getElementById('live-text').textContent = 'En vivo';
+  } catch (e) {
+    document.getElementById('kpis').innerHTML = '<div class="loading">Error cargando datos: ' + e.message + '</div>';
+    console.error(e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
