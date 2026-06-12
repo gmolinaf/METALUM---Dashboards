@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GreenTrack · Dashboards</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0d0c; --surface: #121614; --surface2: #1a1f1d; --border: #232927;
+    --green: #1D9E75; --green-bright: #26C48E;
+    --text: #E8EDEB; --text2: #8B9591; --text3: #5A6360;
+    --blue: #6BA4F5; --amber: #F59E0B; --purple: #A78BFA; --gold: #D4AF37; --red: #E5685F;
+    --cu: #C77B47; --al: #7B97AD; --fe: #9B7B6B; --pp: #6B9B8A; --pa: #A89B6B;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--green), var(--green-bright)); display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background 0.3s; }
+  .brand-text h1 { font-size: 15px; font-weight: 600; }
+  .brand-text p { font-size: 11px; color: var(--text2); }
+  .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-bright); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 4px; }
+  nav button { background: none; border: none; padding: 13px 18px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  nav button.active { color: var(--green-bright); border-bottom-color: var(--green-bright); }
+  nav button:hover { color: var(--text); }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 5px; }
+  .filter-group label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  select, input[type=date] { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text); outline: none; min-width: 130px; cursor: pointer; }
+  select:focus, input:focus { border-color: var(--green); }
+  .btn-filter { color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--green); }
+  .btn-reset { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--green); }
+  .kpi.green::before { background: var(--green); }
+  .kpi.blue::before { background: var(--blue); }
+  .kpi.amber::before { background: var(--amber); }
+  .kpi.purple::before { background: var(--purple); }
+  .kpi-label { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .kpi-value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi-unit { font-size: 14px; color: var(--text3); font-weight: 400; }
+  .kpi-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  .grid { display: grid; gap: 16px; margin-bottom: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 2fr 1fr; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+  .card-title span.sub { font-size: 11px; color: var(--text3); font-weight: 400; }
+  .chart-box { position: relative; height: 280px; }
+  .chart-box.tall { height: 320px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  td { font-size: 13px; padding: 11px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .rank { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--surface2); font-size: 11px; font-weight: 600; margin-right: 8px; }
+  .rank.gold { background: rgba(212,175,55,0.15); color: var(--gold); }
+  .bar-mini { height: 6px; border-radius: 3px; background: var(--green); }
+  .loading { text-align: center; padding: 60px; color: var(--text3); font-size: 14px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-nac { background: rgba(38,196,142,0.15); color: var(--green-bright); }
+  .badge-int { background: rgba(107,164,245,0.15); color: var(--blue); }
+  .pill { font-family: monospace; background: var(--surface2); padding: 2px 8px; border-radius: 5px; font-size: 12px; }
+
+  /* Comercial hero */
+  .hero-stock { background: linear-gradient(135deg, var(--surface), var(--surface2)); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+  .hero-main h2 { font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .hero-main .big { font-size: 54px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .hero-main .big span { font-size: 24px; color: var(--text3); }
+  .hero-main .sub { font-size: 14px; color: var(--text2); margin-top: 6px; }
+  .hero-update { text-align: right; font-size: 12px; color: var(--text3); }
+  .cards-mat { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .mat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .mat-card .dot { width: 12px; height: 12px; border-radius: 50%; margin-bottom: 12px; }
+  .mat-card .name { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+  .mat-card .kg { font-size: 26px; font-weight: 700; }
+  .mat-card .kg span { font-size: 13px; color: var(--text3); font-weight: 400; }
+  .mat-card .fardos { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .mat-card .pct-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+  .mat-card .pct-fill { height: 100%; border-radius: 2px; }
+  .mat-tag { display: inline-flex; align-items: center; gap: 6px; }
+  .mat-tag .d { width: 8px; height: 8px; border-radius: 50%; }
+
+  @media (max-width: 1000px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon" id="brand-icon">🏭</div>
+    <div class="brand-text"><h1>GreenTrack</h1><p id="brand-sub">Dashboard de Producción</p></div>
+  </div>
+  <div class="live"><span class="live-dot"></span><span id="live-text">En vivo</span></div>
+</header>
+
+<nav>
+  <button class="active" onclick="cambiarVista('produccion', this)">Producción</button>
+  <button onclick="cambiarVista('operaciones', this)">Operaciones</button>
+  <button onclick="cambiarVista('comercial', this)">Comercial</button>
+</nav>
+
+<div class="container">
+
+  <!-- ══════════ VISTA PRODUCCIÓN ══════════ -->
+  <div class="view active" id="view-produccion">
+    <div class="filters">
+      <div class="filter-group"><label>Desde</label><input type="date" id="p-desde"/></div>
+      <div class="filter-group"><label>Hasta</label><input type="date" id="p-hasta"/></div>
+      <div class="filter-group"><label>Bodega</label>
+        <select id="p-bodega"><option value="">Todas</option><option>Renca</option><option>Maipú</option><option>La Pintana</option><option>Talcahuano</option></select>
+      </div>
+      <div class="filter-group"><label>Material</label>
+        <select id="p-material"><option value="">Todos</option><option value="CU">Cobre</option><option value="AL">Aluminio</option><option value="FE">Fierro</option><option value="PP">Plástico</option><option value="PA">Papel</option></select>
+      </div>
+      <div class="filter-group"><label>Operador</label><select id="p-operador"><option value="">Todos</option></select></div>
+      <div class="filter-group"><label>Máquina</label>
+        <select id="p-maquina"><option value="">Todas</option><option>PRENSA-1</option><option>PRENSA-2</option><option>PRENSA-3</option><option>TRITURADORA-1</option><option>MANUAL</option></select>
+      </div>
+      <div class="filter-group"><label>Turno</label>
+        <select id="p-turno"><option value="">Todos</option><option>Mañana</option><option>Tarde</option><option>Noche</option></select>
+      </div>
+      <button class="btn-filter" onclick="aplicarProduccion()">Aplicar</button>
+      <button class="btn-reset" onclick="resetProduccion()">Limpiar</button>
+    </div>
+    <div class="kpis" id="p-kpis"><div class="loading">Cargando...</div></div>
+    <div class="grid grid-3">
+      <div class="card"><div class="card-title">Producción diaria <span class="sub">kg por día</span></div><div class="chart-box tall"><canvas id="pChartTiempo"></canvas></div></div>
+      <div class="card"><div class="card-title">Por material <span class="sub">distribución</span></div><div class="chart-box tall"><canvas id="pChartMaterial"></canvas></div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><div class="card-title">Por turno <span class="sub">kg acumulado</span></div><div class="chart-box"><canvas id="pChartTurno"></canvas></div></div>
+      <div class="card"><div class="card-title">Por máquina <span class="sub">kg total</span></div><div class="chart-box"><canvas id="pChartMaquina"></canvas></div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><div class="card-title">Ranking operadores <span class="sub">por producción</span></div>
+        <table id="pTablaOp"><thead><tr><th>Operador</th><th>Fardos</th><th>Kilos</th><th>Prom.</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card"><div class="card-title">Por bodega <span class="sub">kg total</span></div><div class="chart-box"><canvas id="pChartBodega"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- ══════════ VISTA OPERACIONES ══════════ -->
+  <div class="view" id="view-operaciones">
+    <div class="filters">
+      <div class="filter-group"><label>Desde</label><input type="date" id="o-desde"/></div>
+      <div class="filter-group"><label>Hasta</label><input type="date" id="o-hasta"/></div>
+      <div class="filter-group"><label>Bodega origen</label>
+        <select id="o-bodega"><option value="">Todas</option><option>Renca</option><option>Maipú</option><option>La Pintana</option><option>Talcahuano</option></select>
+      </div>
+      <div class="filter-group"><label>Material</label>
+        <select id="o-material"><option value="">Todos</option><option value="CU">Cobre</option><option value="AL">Aluminio</option><option value="FE">Fierro</option><option value="PP">Plástico</option><option value="PA">Papel</option></select>
+      </div>
+      <div class="filter-group"><label>Tipo despacho</label>
+        <select id="o-tipo"><option value="">Todos</option><option>Nacional</option><option>Internacional</option></select>
+      </div>
+      <button class="btn-filter" onclick="aplicarOperaciones()">Aplicar</button>
+      <button class="btn-reset" onclick="resetOperaciones()">Limpiar</button>
+    </div>
+    <div class="kpis" id="o-kpis"><div class="loading">Cargando...</div></div>
+    <div class="grid">
+      <div class="card"><div class="card-title">Producción vs Despacho <span class="sub">kg por día</span></div><div class="chart-box tall"><canvas id="oChartFlujo"></canvas></div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><div class="card-title">Despachos por tipo <span class="sub">nacional vs internacional</span></div><div class="chart-box"><canvas id="oChartTipo"></canvas></div></div>
+      <div class="card"><div class="card-title">Despachos por destino <span class="sub">kg</span></div><div class="chart-box"><canvas id="oChartDestino"></canvas></div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><div class="card-title">Stock por bodega <span class="sub">kg en inventario</span></div><div class="chart-box"><canvas id="oChartStockBod"></canvas></div></div>
+      <div class="card"><div class="card-title">Stock por material <span class="sub">kg disponible</span></div><div class="chart-box"><canvas id="oChartStockMat"></canvas></div></div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="card-title">Últimos despachos <span class="sub">por tanda / camión</span></div>
+        <table id="oTablaDesp"><thead><tr><th>Fecha</th><th>Origen → Destino</th><th>Patente</th><th>Transportista</th><th>Tipo</th><th>Fardos</th><th>Kilos</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ VISTA COMERCIAL ══════════ -->
+  <div class="view" id="view-comercial">
+    <div class="hero-stock">
+      <div class="hero-main">
+        <h2>Stock total disponible para venta</h2>
+        <div class="big" id="c-stock-total">—<span> ton</span></div>
+        <div class="sub" id="c-stock-fardos">Cargando inventario...</div>
+      </div>
+      <div class="hero-update"><div id="c-update">Actualizado ahora</div></div>
+    </div>
+    <div class="cards-mat" id="c-cards"></div>
+    <div class="grid grid-2">
+      <div class="card"><div class="card-title">Stock por bodega <span class="sub">disponible</span></div><div class="chart-box"><canvas id="cChartBodega"></canvas></div></div>
+      <div class="card"><div class="card-title">Volumen despachado <span class="sub">últimos 30 días</span></div><div class="chart-box"><canvas id="cChartVolumen"></canvas></div></div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="card-title">Inventario detallado <span class="sub">material × bodega</span></div>
+        <table id="cTablaStock"><thead><tr><th>Material</th><th>Renca</th><th>Maipú</th><th>La Pintana</th><th>Talcahuano</th><th>Total</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const URL_SB = 'https://zcjjgpamuszekiomygqz.supabase.co';
+const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjampncGFtdXN6ZWtpb215Z3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzA2NjYsImV4cCI6MjA5NjYwNjY2Nn0.3_WEmxpwPs6svbcrw1cS6C7Bc-N64PBoq9aoXxICwi4';
+const H = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
+const MAT_NOMBRE = { CU: 'Cobre', AL: 'Aluminio', FE: 'Fierro', PP: 'Plástico', PA: 'Papel' };
+const COLORS = { CU: '#C77B47', AL: '#7B97AD', FE: '#9B7B6B', PP: '#6B9B8A', PA: '#A89B6B' };
+const BODEGAS = ['Renca', 'Maipú', 'La Pintana', 'Talcahuano'];
+
+Chart.defaults.color = '#8B9591';
+Chart.defaults.borderColor = '#232927';
+
+let charts = {};
+let cargado = { produccion: false, operaciones: false, comercial: false };
+
+const BRAND = {
+  produccion: { icon: '🏭', sub: 'Dashboard de Producción', color: 'linear-gradient(135deg,#1D9E75,#26C48E)', accent: '#26C48E' },
+  operaciones: { icon: '📊', sub: 'Dashboard de Operaciones', color: 'linear-gradient(135deg,#6BA4F5,#4A7FD4)', accent: '#6BA4F5' },
+  comercial: { icon: '💰', sub: 'Dashboard Comercial', color: 'linear-gradient(135deg,#D4AF37,#B8941F)', accent: '#D4AF37' }
+};
+
+async function fetchSB(query) {
+  const r = await fetch(URL_SB + '/rest/v1/' + query, { headers: H });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function paginado(q) {
+  let all = [], offset = 0, hayMas = true;
+  while (hayMas) {
+    const d = await fetchSB(`${q}&limit=1000&offset=${offset}`);
+    all = all.concat(d);
+    if (d.length < 1000) hayMas = false; else offset += 1000;
+  }
+  all.forEach(r => { if (r.peso !== undefined) r.peso = Number(r.peso) || 0; });
+  return all;
+}
+function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
+function destruirCharts(prefix) {
+  Object.keys(charts).forEach(k => { if (k.startsWith(prefix)) { charts[k].destroy(); delete charts[k]; } });
+}
+
+function cambiarVista(vista, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + vista).classList.add('active');
+  btn.classList.add('active');
+
+  const b = BRAND[vista];
+  document.getElementById('brand-icon').textContent = b.icon;
+  document.getElementById('brand-icon').style.background = b.color;
+  document.getElementById('brand-sub').textContent = b.sub;
+
+  if (!cargado[vista]) {
+    if (vista === 'produccion') initProduccion();
+    if (vista === 'operaciones') initOperaciones();
+    if (vista === 'comercial') initComercial();
+    cargado[vista] = true;
+  }
+}
+
+// ══════════ PRODUCCIÓN ══════════
+async function cargarProduccion(f = {}) {
+  let q = 'pesaje_data?select=peso,material_code,bodega,operador,maquina,turno,timestamp&order=timestamp.asc';
+  if (f.desde) q += `&timestamp=gte.${f.desde}T00:00:00`;
+  if (f.hasta) q += `&timestamp=lte.${f.hasta}T23:59:59`;
+  if (f.bodega) q += `&bodega=eq.${encodeURIComponent(f.bodega)}`;
+  if (f.material) q += `&material_code=eq.${f.material}`;
+  if (f.operador) q += `&operador=eq.${encodeURIComponent(f.operador)}`;
+  if (f.maquina) q += `&maquina=eq.${f.maquina}`;
+  if (f.turno) q += `&turno=eq.${f.turno}`;
+  return paginado(q);
+}
+function renderProduccion(data) {
+  destruirCharts('p');
+  const totFardos = data.length, totKilos = data.reduce((a,r)=>a+r.peso,0);
+  const prom = totFardos ? Math.round(totKilos/totFardos) : 0;
+  const dias = new Set(data.map(r=>r.timestamp.split('T')[0]));
+  const promDia = dias.size ? Math.round(totKilos/dias.size) : 0;
+  const porMat = {}; data.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
+  const matTop = Object.entries(porMat).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('p-kpis').innerHTML = `
+    <div class="kpi green"><div class="kpi-label">Producción total</div><div class="kpi-value">${fmt(totKilos/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(totFardos)} fardos</div></div>
+    <div class="kpi green"><div class="kpi-label">Promedio por fardo</div><div class="kpi-value">${fmt(prom)}<span class="kpi-unit">kg</span></div><div class="kpi-sub">por unidad</div></div>
+    <div class="kpi green"><div class="kpi-label">Promedio diario</div><div class="kpi-value">${fmt(promDia/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${dias.size} días</div></div>
+    <div class="kpi green"><div class="kpi-label">Material principal</div><div class="kpi-value" style="font-size:24px;">${matTop?MAT_NOMBRE[matTop[0]]:'—'}</div><div class="kpi-sub">${matTop?fmt(matTop[1]/1000)+' ton':''}</div></div>`;
+
+  // tiempo
+  const porDia = {}; data.forEach(r=>{const d=r.timestamp.split('T')[0];porDia[d]=(porDia[d]||0)+r.peso;});
+  const ds = Object.keys(porDia).sort();
+  charts.pTiempo = new Chart(document.getElementById('pChartTiempo'), { type:'line', data:{ labels: ds.map(d=>{const[y,m,dd]=d.split('-');return `${dd}/${m}`;}), datasets:[{ data: ds.map(d=>porDia[d]), borderColor:'#26C48E', backgroundColor:'rgba(38,196,142,0.08)', fill:true, tension:0.3, pointRadius:0, borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:10}}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+  // material
+  const mk = Object.keys(porMat);
+  charts.pMaterial = new Chart(document.getElementById('pChartMaterial'), { type:'doughnut', data:{ labels: mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data: mk.map(m=>porMat[m]), backgroundColor: mk.map(m=>COLORS[m]), borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,font:{size:11}}}},cutout:'60%'}});
+  // turno
+  const pt={'Mañana':0,'Tarde':0,'Noche':0}; data.forEach(r=>pt[r.turno]=(pt[r.turno]||0)+r.peso);
+  charts.pTurno = new Chart(document.getElementById('pChartTurno'), { type:'bar', data:{ labels:['Mañana','Tarde','Noche'], datasets:[{ data:[pt['Mañana'],pt['Tarde'],pt['Noche']], backgroundColor:['#F59E0B','#6BA4F5','#A78BFA'], borderRadius:8, barThickness:60 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+  // maquina
+  const pm={}; data.forEach(r=>pm[r.maquina]=(pm[r.maquina]||0)+r.peso);
+  const mq=Object.keys(pm).sort((a,b)=>pm[b]-pm[a]);
+  charts.pMaquina = new Chart(document.getElementById('pChartMaquina'), { type:'bar', data:{ labels:mq, datasets:[{ data:mq.map(m=>pm[m]), backgroundColor:'#1D9E75', borderRadius:6, barThickness:32 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}});
+  // bodega
+  const pb={}; data.forEach(r=>pb[r.bodega]=(pb[r.bodega]||0)+r.peso);
+  const bd=Object.keys(pb).sort((a,b)=>pb[b]-pb[a]);
+  charts.pBodega = new Chart(document.getElementById('pChartBodega'), { type:'bar', data:{ labels:bd, datasets:[{ data:bd.map(b=>pb[b]), backgroundColor:['#1D9E75','#26C48E','#15806A','#1FB387'], borderRadius:6, barThickness:40 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+  // ranking
+  const po={}; data.forEach(r=>{if(!po[r.operador])po[r.operador]={f:0,k:0};po[r.operador].f++;po[r.operador].k+=r.peso;});
+  const ops=Object.entries(po).sort((a,b)=>b[1].k-a[1].k);
+  const maxK=ops.length?ops[0][1].k:1;
+  document.querySelector('#pTablaOp tbody').innerHTML = ops.map(([n,d],i)=>{const pr=Math.round(d.k/d.f);const pc=(d.k/maxK*100).toFixed(0);return `<tr><td><span class="rank ${i===0?'gold':''}">${i+1}</span>${n}</td><td>${fmt(d.f)}</td><td>${fmt(d.k/1000)} t</td><td><div style="display:flex;align-items:center;gap:8px;"><div class="bar-mini" style="width:${pc}%;max-width:50px;"></div><span style="font-size:12px;color:var(--text3);">${fmt(pr)}</span></div></td></tr>`;}).join('');
+}
+async function initProduccion() {
+  try {
+    const data = await cargarProduccion();
+    const operadores = [...new Set(data.map(r=>r.operador))].sort();
+    document.getElementById('p-operador').innerHTML = '<option value="">Todos</option>' + operadores.map(o=>`<option>${o}</option>`).join('');
+    renderProduccion(data);
+  } catch(e){ document.getElementById('p-kpis').innerHTML='<div class="loading">Error: '+e.message+'</div>'; }
+}
+async function aplicarProduccion() {
+  const f = { desde:p('p-desde'), hasta:p('p-hasta'), bodega:p('p-bodega'), material:p('p-material'), operador:p('p-operador'), maquina:p('p-maquina'), turno:p('p-turno') };
+  renderProduccion(await cargarProduccion(f));
+}
+function resetProduccion() { ['p-desde','p-hasta','p-bodega','p-material','p-operador','p-maquina','p-turno'].forEach(id=>document.getElementById(id).value=''); aplicarProduccion(); }
+
+// ══════════ OPERACIONES ══════════
+async function cargarOpTabla(tabla, select, f = {}) {
+  let q = `${tabla}?select=${select}&order=timestamp.asc`;
+  if (f.desde) q += `&timestamp=gte.${f.desde}T00:00:00`;
+  if (f.hasta) q += `&timestamp=lte.${f.hasta}T23:59:59`;
+  if (f.bodega) q += `&${tabla==='despachos'?'origen':'bodega'}=eq.${encodeURIComponent(f.bodega)}`;
+  if (f.material) q += `&material_code=eq.${f.material}`;
+  if (f.tipo && tabla==='despachos') q += `&tipo_despacho=eq.${f.tipo}`;
+  return paginado(q);
+}
+async function cargarStockOp(f = {}) {
+  let q = `pesaje_data?select=peso,material_code,bodega&despachado=eq.false`;
+  if (f.bodega) q += `&bodega=eq.${encodeURIComponent(f.bodega)}`;
+  if (f.material) q += `&material_code=eq.${f.material}`;
+  return paginado(q);
+}
+function renderOperaciones(prod, desp, stock) {
+  destruirCharts('o');
+  const kgP=prod.reduce((a,r)=>a+r.peso,0), kgD=desp.reduce((a,r)=>a+r.peso,0), kgS=stock.reduce((a,r)=>a+r.peso,0);
+  const tandas=new Set(desp.map(d=>d.patente+'|'+d.timestamp.split('T')[0])).size;
+  document.getElementById('o-kpis').innerHTML = `
+    <div class="kpi green"><div class="kpi-label">Producido</div><div class="kpi-value">${fmt(kgP/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(prod.length)} fardos</div></div>
+    <div class="kpi blue"><div class="kpi-label">Despachado</div><div class="kpi-value">${fmt(kgD/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(desp.length)} fardos · ${tandas} viajes</div></div>
+    <div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">${fmt(kgS/1000)}<span class="kpi-unit">ton</span></div><div class="kpi-sub">${fmt(stock.length)} fardos</div></div>
+    <div class="kpi purple"><div class="kpi-label">Rotación</div><div class="kpi-value">${kgP?((kgD/kgP)*100).toFixed(0):0}<span class="kpi-unit">%</span></div><div class="kpi-sub">despachado / producido</div></div>`;
+  // flujo
+  const pd={},dd={}; prod.forEach(r=>{const d=r.timestamp.split('T')[0];pd[d]=(pd[d]||0)+r.peso;}); desp.forEach(r=>{const d=r.timestamp.split('T')[0];dd[d]=(dd[d]||0)+r.peso;});
+  const dias=[...new Set([...Object.keys(pd),...Object.keys(dd)])].sort();
+  charts.oFlujo = new Chart(document.getElementById('oChartFlujo'), { type:'line', data:{ labels:dias.map(d=>{const[y,m,dd]=d.split('-');return `${dd}/${m}`;}), datasets:[{label:'Producción',data:dias.map(d=>pd[d]||0),borderColor:'#26C48E',backgroundColor:'rgba(38,196,142,0.06)',fill:true,tension:0.3,pointRadius:0,borderWidth:2},{label:'Despacho',data:dias.map(d=>dd[d]||0),borderColor:'#6BA4F5',backgroundColor:'rgba(107,164,245,0.06)',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{usePointStyle:true,padding:16}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:10}}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+  // tipo
+  const pt={}; desp.forEach(r=>pt[r.tipo_despacho]=(pt[r.tipo_despacho]||0)+r.peso);
+  charts.oTipo = new Chart(document.getElementById('oChartTipo'), { type:'doughnut', data:{ labels:Object.keys(pt), datasets:[{ data:Object.values(pt), backgroundColor:['#26C48E','#6BA4F5'], borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:14}}},cutout:'62%'}});
+  // destino
+  const pdest={}; desp.forEach(r=>pdest[r.destino]=(pdest[r.destino]||0)+r.peso);
+  const dests=Object.keys(pdest).sort((a,b)=>pdest[b]-pdest[a]);
+  charts.oDestino = new Chart(document.getElementById('oChartDestino'), { type:'bar', data:{ labels:dests, datasets:[{ data:dests.map(d=>pdest[d]), backgroundColor:'#6BA4F5', borderRadius:6, barThickness:34 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}});
+  // stock bodega
+  const sb={}; BODEGAS.forEach(b=>sb[b]=0); stock.forEach(r=>sb[r.bodega]=(sb[r.bodega]||0)+r.peso);
+  charts.oStockBod = new Chart(document.getElementById('oChartStockBod'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#F59E0B', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+  // stock material
+  const sm={}; stock.forEach(r=>sm[r.material_code]=(sm[r.material_code]||0)+r.peso);
+  const smk=Object.keys(sm);
+  charts.oStockMat = new Chart(document.getElementById('oChartStockMat'), { type:'doughnut', data:{ labels:smk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:smk.map(m=>sm[m]), backgroundColor:smk.map(m=>COLORS[m]), borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:12}}},cutout:'60%'}});
+  // tabla
+  const tandasMap={}; desp.forEach(d=>{const k=d.patente+'|'+d.timestamp;if(!tandasMap[k])tandasMap[k]={...d,fardos:0,kilos:0};tandasMap[k].fardos++;tandasMap[k].kilos+=Number(d.peso||0);});
+  const lista=Object.values(tandasMap).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)).slice(0,15);
+  document.querySelector('#oTablaDesp tbody').innerHTML = lista.map(d=>{const dt=new Date(d.timestamp);const fecha=dt.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit'});const bc=d.tipo_despacho==='Nacional'?'badge-nac':'badge-int';return `<tr><td>${fecha}</td><td>${d.origen} → ${d.destino}</td><td><span class="pill">${d.patente}</span></td><td>${d.transportista}</td><td><span class="badge ${bc}">${d.tipo_despacho}</span></td><td>${d.fardos}</td><td>${fmt(d.kilos/1000)} t</td></tr>`;}).join('');
+}
+async function initOperaciones() { await aplicarOperaciones(); }
+async function aplicarOperaciones() {
+  const f = { desde:p('o-desde'), hasta:p('o-hasta'), bodega:p('o-bodega'), material:p('o-material'), tipo:p('o-tipo') };
+  try {
+    const prod = await cargarOpTabla('pesaje_data','peso,material_code,bodega,timestamp',f);
+    const desp = await cargarOpTabla('despachos','peso,material_code,origen,destino,tipo_despacho,patente,transportista,timestamp',f);
+    const stock = await cargarStockOp({bodega:f.bodega,material:f.material});
+    renderOperaciones(prod, desp, stock);
+  } catch(e){ document.getElementById('o-kpis').innerHTML='<div class="loading">Error: '+e.message+'</div>'; console.error(e); }
+}
+function resetOperaciones() { ['o-desde','o-hasta','o-bodega','o-material','o-tipo'].forEach(id=>document.getElementById(id).value=''); aplicarOperaciones(); }
+
+// ══════════ COMERCIAL ══════════
+async function initComercial() {
+  try {
+    const stock = await paginado('pesaje_data?select=peso,material_code,bodega&despachado=eq.false');
+    const hace30 = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
+    const desp = await paginado(`pesaje_data?select=peso,material_code&despachado=eq.true&timestamp=gte.${hace30}T00:00:00`);
+    const kg = stock.reduce((a,r)=>a+r.peso,0);
+    document.getElementById('c-stock-total').innerHTML = fmt(kg/1000)+'<span> ton</span>';
+    document.getElementById('c-stock-fardos').textContent = fmt(stock.length)+' fardos disponibles en bodega';
+    document.getElementById('c-update').textContent = 'Actualizado '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+    // cards
+    const pm={}; stock.forEach(r=>{if(!pm[r.material_code])pm[r.material_code]={kg:0,f:0};pm[r.material_code].kg+=r.peso;pm[r.material_code].f++;});
+    const totK=Object.values(pm).reduce((a,m)=>a+m.kg,0);
+    const mats=Object.keys(pm).sort((a,b)=>pm[b].kg-pm[a].kg);
+    document.getElementById('c-cards').innerHTML = mats.map(m=>{const pc=(pm[m].kg/totK*100).toFixed(0);return `<div class="mat-card"><div class="dot" style="background:${COLORS[m]}"></div><div class="name">${MAT_NOMBRE[m]}</div><div class="kg">${fmt(pm[m].kg/1000)}<span> ton</span></div><div class="fardos">${fmt(pm[m].f)} fardos · ${pc}%</div><div class="pct-bar"><div class="pct-fill" style="width:${pc}%;background:${COLORS[m]}"></div></div></div>`;}).join('');
+    // chart bodega
+    destruirCharts('c');
+    const sb={}; BODEGAS.forEach(b=>sb[b]=0); stock.forEach(r=>sb[r.bodega]=(sb[r.bodega]||0)+r.peso);
+    charts.cBodega = new Chart(document.getElementById('cChartBodega'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#D4AF37', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+    // chart volumen
+    const pv={}; desp.forEach(r=>pv[r.material_code]=(pv[r.material_code]||0)+r.peso);
+    const pvk=Object.keys(pv).sort((a,b)=>pv[b]-pv[a]);
+    charts.cVolumen = new Chart(document.getElementById('cChartVolumen'), { type:'doughnut', data:{ labels:pvk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:pvk.map(m=>pv[m]), backgroundColor:pvk.map(m=>COLORS[m]), borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:12}}},cutout:'60%'}});
+    // tabla
+    const grid={}; const materiales=['CU','AL','FE','PP','PA'];
+    materiales.forEach(m=>grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0});
+    stock.forEach(r=>{if(grid[r.material_code])grid[r.material_code][r.bodega]+=r.peso;});
+    document.querySelector('#cTablaStock tbody').innerHTML = materiales.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return `<tr><td><span class="mat-tag"><span class="d" style="background:${COLORS[m]}"></span>${MAT_NOMBRE[m]}</span></td><td>${fmt(fila['Renca']/1000)} t</td><td>${fmt(fila['Maipú']/1000)} t</td><td>${fmt(fila['La Pintana']/1000)} t</td><td>${fmt(fila['Talcahuano']/1000)} t</td><td style="font-weight:600;">${fmt(tot/1000)} t</td></tr>`;}).join('');
+  } catch(e){ document.getElementById('c-stock-fardos').textContent='Error: '+e.message; console.error(e); }
+}
+
+function p(id){ return document.getElementById(id).value; }
+
+// Arranque
+initProduccion();
+</script>
+</body>
+</html>
