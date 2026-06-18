@@ -55,6 +55,7 @@
   .card-title span.sub { font-size: 11px; color: var(--text3); font-weight: 400; }
   .chart-box { position: relative; height: 280px; }
   .chart-box.tall { height: 320px; }
+  .chart-box.xtall { height: 640px; }
   .master-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
   .master-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 16px; flex-wrap: wrap; }
   .master-title { font-size: 13px; font-weight: 600; }
@@ -120,7 +121,7 @@
 <nav>
   <button class="active" onclick="cambiarVista('produccion', this)">Producción</button>
   <button onclick="cambiarVista('stock', this)">Stock</button>
-  <button onclick="cambiarVista('operaciones', this)">Operaciones</button>
+  <button onclick="cambiarVista('operaciones', this)">Despachos</button>
   <button onclick="cambiarVista('comercial', this)">Comercial</button>
 </nav>
 <div class="container">
@@ -159,16 +160,18 @@
     </div>
     <div class="grid grid-3">
       <div class="card"><div class="card-title">Producción diaria <span class="sub">kg por día</span></div><div class="chart-box tall"><canvas id="pChartTiempo"></canvas></div></div>
-      <div class="card"><div class="card-title">Por material <span class="sub">distribución</span></div><div class="chart-box tall"><canvas id="pChartMaterial"></canvas></div></div>
+      <div class="card"><div class="card-title">Por turno <span class="sub">kg</span></div><div class="chart-box tall"><canvas id="pChartTurno"></canvas></div></div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="card-title">Por material <span class="sub">distribución · % sobre total</span></div><div class="chart-box xtall"><canvas id="pChartMaterial"></canvas></div></div>
     </div>
     <div class="grid grid-2">
-      <div class="card"><div class="card-title">Por turno <span class="sub">kg</span></div><div class="chart-box"><canvas id="pChartTurno"></canvas></div></div>
       <div class="card"><div class="card-title">Por máquina <span class="sub">kg total</span></div><div class="chart-box"><canvas id="pChartMaquina"></canvas></div></div>
+      <div class="card"><div class="card-title">Por bodega <span class="sub">kg total</span></div><div class="chart-box"><canvas id="pChartBodega"></canvas></div></div>
     </div>
-    <div class="grid grid-2">
+    <div class="grid">
       <div class="card"><div class="card-title">Ranking operadores <span class="sub">por producción</span></div>
         <table id="pTablaOp"><thead><tr><th>Operador</th><th>Fardos</th><th>Kilos</th><th>Prom.</th></tr></thead><tbody></tbody></table></div>
-      <div class="card"><div class="card-title">Por bodega <span class="sub">kg total</span></div><div class="chart-box"><canvas id="pChartBodega"></canvas></div></div>
     </div>
   </div>
 
@@ -181,13 +184,34 @@
         <select id="s-material" onchange="initStock()"><option value="">Todos</option></select></div>
     </div>
     <div id="s-kpis" class="kpis"><div class="loading">Cargando...</div></div>
-    <div class="grid grid-2">
-      <div class="card"><div class="card-title">Stock por bodega <span class="sub">kg disponible</span></div><div class="chart-box"><canvas id="sChartBodega"></canvas></div></div>
-      <div class="card"><div class="card-title">Stock por material <span class="sub">kg disponible</span></div><div class="chart-box tall"><canvas id="sChartMaterial"></canvas></div></div>
-    </div>
+
+    <!-- 1) Inventario detallado (apretable: filtra la tabla maestra) -->
     <div class="master-card">
-      <div class="master-head"><div class="master-title">Inventario detallado <span class="sub">material × bodega</span></div></div>
+      <div class="master-head"><div class="master-title">Inventario detallado <span class="sub">material × bodega · haz clic en una fila para filtrar</span></div></div>
       <div class="table-scroll"><table id="sTablaInv"><thead><tr><th>Material</th><th>Renca</th><th>Maipú</th><th>La Pintana</th><th>Talcahuano</th><th>Total</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- 2) Tabla maestra (igual a producción, con buscador) -->
+    <div class="master-card">
+      <div class="master-head">
+        <div class="master-title">Fardos en stock <span id="s-table-info"></span></div>
+        <div class="search-wrap"><span class="search-icon">🔍</span>
+          <input type="text" id="s-search" placeholder="Buscar por folio, material, bodega..." oninput="filtrarTablaStock()"/></div>
+        <div class="selection-bar"><span><span class="count" id="s-sel-count">0</span> filtro</span>
+          <button class="btn-clear-sel" onclick="limpiarFiltroStock()">Limpiar</button></div>
+      </div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Folio</th><th>Peso</th><th>Material</th><th>Bodega</th><th>Fecha</th></tr></thead>
+        <tbody id="s-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- 3) Gráficos -->
+    <div class="grid">
+      <div class="card"><div class="card-title">Stock por bodega <span class="sub">kg disponible</span></div><div class="chart-box"><canvas id="sChartBodega"></canvas></div></div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="card-title">Stock por material <span class="sub">kg disponible · % sobre total</span></div><div class="chart-box xtall"><canvas id="sChartMaterial"></canvas></div></div>
     </div>
   </div>
 
@@ -312,13 +336,44 @@ if (window.ChartDataLabels) { Chart.defaults.plugins.datalabels = { display: fal
 let charts = {};
 let cargado = { produccion: false, stock: false, operaciones: false, comercial: false };
 let dataProduccion = [], filtradosProduccion = [], seleccionProduccion = new Set();
+// Filtros activos por clic en gráficos (combinables). Cada dimensión es un Set de valores.
+let filtrosProd = { material_code:new Set(), maquina:new Set(), turno:new Set(), bodega:new Set() };
+
+// Aplica buscador + filtros de gráficos sobre dataProduccion
+function aplicarTodoProduccion() {
+  let base = dataProduccion.slice();
+  // Filtros de gráficos (combinables: cada dimensión activa restringe)
+  Object.keys(filtrosProd).forEach(dim => {
+    if (filtrosProd[dim].size > 0) base = base.filter(r => filtrosProd[dim].has(r[dim]));
+  });
+  // Buscador de texto
+  const q = document.getElementById('p-search').value.toLowerCase().trim();
+  if (q) {
+    base = base.filter(r =>
+      r.folio.toLowerCase().includes(q) || r.operador.toLowerCase().includes(q) ||
+      (MAT_NOMBRE[r.material_code]||'').toLowerCase().includes(q) || r.material_code.toLowerCase().includes(q) ||
+      r.bodega.toLowerCase().includes(q) || r.maquina.toLowerCase().includes(q) || r.turno.toLowerCase().includes(q));
+  }
+  filtradosProduccion = base;
+  seleccionProduccion.forEach(f => { if (!filtradosProduccion.find(r => r.folio === f)) seleccionProduccion.delete(f); });
+  renderTablaProduccion();
+  // Gráficos: SIEMPRE sobre toda la data (resaltan lo filtrado). KPIs: sobre la data filtrada.
+  renderGraficosProduccion(dataProduccion, getDatosActivosProduccion());
+}
+
+// Clic en una barra: agrega/quita el valor del filtro de esa dimensión
+function toggleFiltroProd(dim, valor) {
+  if (filtrosProd[dim].has(valor)) filtrosProd[dim].delete(valor);
+  else filtrosProd[dim].add(valor);
+  aplicarTodoProduccion();
+}
 let prodOperaciones = [], stockOperaciones = [];
 let prodIndexPorFolio = {};  // folio -> fardo de producción (para cruzar fechas)
 
 const BRAND = {
   produccion: { icon: '🏭', sub: 'Dashboard de Producción', color: 'linear-gradient(135deg,#1D9E75,#26C48E)' },
   stock: { icon: '📦', sub: 'Dashboard de Stock', color: 'linear-gradient(135deg,#F59E0B,#D97706)' },
-  operaciones: { icon: '📊', sub: 'Dashboard de Operaciones', color: 'linear-gradient(135deg,#6BA4F5,#4A7FD4)' },
+  operaciones: { icon: '📊', sub: 'Dashboard de Despachos', color: 'linear-gradient(135deg,#6BA4F5,#4A7FD4)' },
   comercial: { icon: '💰', sub: 'Dashboard Comercial', color: 'linear-gradient(135deg,#D4AF37,#B8941F)' }
 };
 
@@ -419,56 +474,54 @@ function renderTablaProduccion() {
   document.getElementById('p-sel-count').textContent = seleccionProduccion.size;
 }
 function filtrarTablaProduccion() {
-  const q = document.getElementById('p-search').value.toLowerCase().trim();
-  if (!q) { filtradosProduccion = dataProduccion.slice(); }
-  else {
-    filtradosProduccion = dataProduccion.filter(r =>
-      r.folio.toLowerCase().includes(q) || r.operador.toLowerCase().includes(q) ||
-      (MAT_NOMBRE[r.material_code]||'').toLowerCase().includes(q) || r.material_code.toLowerCase().includes(q) ||
-      r.bodega.toLowerCase().includes(q) || r.maquina.toLowerCase().includes(q) || r.turno.toLowerCase().includes(q));
-  }
-  seleccionProduccion.forEach(f => { if (!filtradosProduccion.find(r => r.folio === f)) seleccionProduccion.delete(f); });
-  renderTablaProduccion();
-  renderGraficosProduccion(getDatosActivosProduccion());
+  aplicarTodoProduccion();
 }
 function toggleFilaProduccion(folio) {
   if (seleccionProduccion.has(folio)) seleccionProduccion.delete(folio); else seleccionProduccion.add(folio);
   renderTablaProduccion();
-  renderGraficosProduccion(getDatosActivosProduccion());
+  renderGraficosProduccion(dataProduccion, getDatosActivosProduccion());
 }
 function limpiarSeleccionProduccion() {
   seleccionProduccion.clear();
-  renderTablaProduccion();
-  renderGraficosProduccion(getDatosActivosProduccion());
+  Object.keys(filtrosProd).forEach(d => filtrosProd[d].clear());
+  document.getElementById('p-search').value = '';
+  aplicarTodoProduccion();
 }
-function renderGraficosProduccion(data) {
+function renderGraficosProduccion(dataGraficos, dataKpi) {
+  // Si solo viene un argumento (carga inicial), usar el mismo para ambos
+  if (dataKpi === undefined) dataKpi = dataGraficos;
   destruirCharts('p');
-  const totFardos = data.length, totKilos = data.reduce((a,r)=>a+r.peso,0);
-  const prom = totFardos ? Math.round(totKilos/totFardos) : 0;
-  const dias = new Set(data.filter(r=>r.timestamp).map(r=>r.timestamp.split('T')[0]));
-  const promDia = dias.size ? Math.round(totKilos/dias.size) : 0;
-  const porMat = {}; data.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
-  const matTop = Object.entries(porMat).sort((a,b)=>b[1]-a[1])[0];
 
-  // ── Tendencias: hoy vs ayer, esta semana vs anterior ──
+  // Looker puro: cada gráfico usa la data filtrada por TODAS las dimensiones excepto la suya.
+  // dataGraficos = data base (sin filtros de clic). dataKpi = data ya filtrada por todo.
+  const base = dataGraficos;
+  // Filtra base aplicando todos los filtros de clic EXCEPTO la dimensión indicada
+  const dataExcepto = (dimExcluir) => {
+    let d = base.slice();
+    Object.keys(filtrosProd).forEach(dim => {
+      if (dim !== dimExcluir && filtrosProd[dim].size > 0) d = d.filter(r => filtrosProd[dim].has(r[dim]));
+    });
+    return d;
+  };
+
+  // KPIs sobre la data totalmente filtrada
+  const totFardos = dataKpi.length, totKilos = dataKpi.reduce((a,r)=>a+r.peso,0);
+  const porMatKpi = {}; dataKpi.forEach(r=>porMatKpi[r.material_code]=(porMatKpi[r.material_code]||0)+r.peso);
+  const matTop = Object.entries(porMatKpi).sort((a,b)=>b[1]-a[1])[0];
+
+  // ── Tendencias: hoy vs ayer, semana (sobre data filtrada) ──
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const ayer = new Date(hoy); ayer.setDate(ayer.getDate()-1);
-  const finSemana = new Date(hoy); finSemana.setDate(finSemana.getDate()+1); // mañana 00:00
-  const iniSemana = new Date(hoy); iniSemana.setDate(iniSemana.getDate()-6); // últimos 7 días
+  const finSemana = new Date(hoy); finSemana.setDate(finSemana.getDate()+1);
+  const iniSemana = new Date(hoy); iniSemana.setDate(iniSemana.getDate()-6);
   const iniSemanaPrev = new Date(iniSemana); iniSemanaPrev.setDate(iniSemanaPrev.getDate()-7);
-
-  const kgEntre = (desde, hasta) => data.reduce((a,r)=>{
+  const kgEntre = (desde, hasta) => dataKpi.reduce((a,r)=>{
     if(!r.timestamp) return a;
     const t = new Date(r.timestamp);
     return (t>=desde && t<hasta) ? a+r.peso : a;
   },0);
-
-  const kgHoy = kgEntre(hoy, finSemana);
-  const kgAyer = kgEntre(ayer, hoy);
-  const kgSem = kgEntre(iniSemana, finSemana);
-  const kgSemPrev = kgEntre(iniSemanaPrev, iniSemana);
-
-  // Helpers de variación con flecha y color
+  const kgHoy = kgEntre(hoy, finSemana), kgAyer = kgEntre(ayer, hoy);
+  const kgSem = kgEntre(iniSemana, finSemana), kgSemPrev = kgEntre(iniSemanaPrev, iniSemana);
   const variacion = (actual, previo) => {
     if (previo === 0) return actual > 0 ? '<span style="color:#26C48E;">↑ nuevo</span>' : '<span style="color:#888;">—</span>';
     const pct = ((actual - previo) / previo) * 100;
@@ -476,28 +529,46 @@ function renderGraficosProduccion(data) {
     const color = pct >= 0 ? '#26C48E' : '#F87171';
     return '<span style="color:' + color + ';">' + flecha + ' ' + Math.abs(pct).toFixed(0) + '%</span>';
   };
-
   document.getElementById('p-kpis').innerHTML =
     '<div class="kpi green"><div class="kpi-label">Producción total</div><div class="kpi-value">' + fmt(totKilos/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(totFardos) + ' fardos</div></div>' +
     '<div class="kpi green"><div class="kpi-label">Hoy</div><div class="kpi-value">' + fmt(kgHoy/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs ayer ' + variacion(kgHoy, kgAyer) + '</div></div>' +
     '<div class="kpi green"><div class="kpi-label">Últimos 7 días</div><div class="kpi-value">' + fmt(kgSem/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs semana previa ' + variacion(kgSem, kgSemPrev) + '</div></div>' +
     '<div class="kpi green"><div class="kpi-label">Material principal</div><div class="kpi-value" style="font-size:24px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmt(matTop[1]/1000)+' ton':'') + '</div></div>';
-  const porDia = {}; data.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];porDia[d]=(porDia[d]||0)+r.peso;});
+
+  // Línea de tiempo (usa data totalmente filtrada para reflejar la selección)
+  const porDia = {}; dataKpi.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];porDia[d]=(porDia[d]||0)+r.peso;});
   const ds = Object.keys(porDia).sort();
   charts.pTiempo = new Chart(document.getElementById('pChartTiempo'), { type:'line', data:{ labels: ds.map(d=>{const a=d.split('-');return a[2]+'/'+a[1];}), datasets:[{ data: ds.map(d=>porDia[d]), borderColor:'#26C48E', backgroundColor:'rgba(38,196,142,0.08)', fill:true, tension:0.3, pointRadius: ds.length<40?3:0, borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:10}}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
-  const mk = Object.keys(porMat);
+
+  // MATERIAL: filtrado por todo excepto material (muestra todos los materiales)
+  const dMat = dataExcepto('material_code');
+  const porMat = {}; dMat.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
+  const mk = Object.keys(porMat).sort((a,b)=>porMat[a]-porMat[b]);
   const totMatKg = mk.reduce((a,m)=>a+porMat[m],0)||1;
-  charts.pMaterial = new Chart(document.getElementById('pChartMaterial'), { type:'bar', data:{ labels: mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data: mk.map(m=>porMat[m]), backgroundColor: mk.map(m=>COLORS[m]), borderRadius:6, barThickness:18 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMatKg*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}, plugins:[ChartDataLabels]});
-  const pt={'Mañana':0,'Tarde':0,'Noche':0}; data.forEach(r=>pt[r.turno]=(pt[r.turno]||0)+r.peso);
-  charts.pTurno = new Chart(document.getElementById('pChartTurno'), { type:'bar', data:{ labels:['Mañana','Tarde','Noche'], datasets:[{ data:[pt['Mañana'],pt['Tarde'],pt['Noche']], backgroundColor:['#F59E0B','#6BA4F5','#A78BFA'], borderRadius:8, barThickness:60 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
-  const pm={}; data.forEach(r=>pm[r.maquina]=(pm[r.maquina]||0)+r.peso);
+  charts.pMaterial = new Chart(document.getElementById('pChartMaterial'), { type:'bar', data:{ labels: mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data: mk.map(m=>porMat[m]), backgroundColor: mk.map(m=>filtrosProd.material_code.size && !filtrosProd.material_code.has(m) ? '#3a3a3a' : COLORS[m]), borderRadius:6, barThickness:18 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)toggleFiltroProd('material_code',mk[el[0].index]);},layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMatKg*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}, plugins:[ChartDataLabels]});
+
+  // TURNO: filtrado por todo excepto turno
+  const dTur = dataExcepto('turno');
+  const pt={'Mañana':0,'Tarde':0,'Noche':0}; dTur.forEach(r=>pt[r.turno]=(pt[r.turno]||0)+r.peso);
+  const turnos=['Mañana','Tarde','Noche'];
+  charts.pTurno = new Chart(document.getElementById('pChartTurno'), { type:'bar', data:{ labels:turnos, datasets:[{ data:turnos.map(t=>pt[t]), backgroundColor:turnos.map((t,i)=>filtrosProd.turno.size && !filtrosProd.turno.has(t) ? '#3a3a3a' : ['#F59E0B','#6BA4F5','#A78BFA'][i]), borderRadius:8, barThickness:60 }]}, options:{responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)toggleFiltroProd('turno',turnos[el[0].index]);},plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+
+  // MÁQUINA: filtrado por todo excepto máquina
+  const dMaq = dataExcepto('maquina');
+  const pm={}; dMaq.forEach(r=>pm[r.maquina]=(pm[r.maquina]||0)+r.peso);
   const mq=Object.keys(pm).sort((a,b)=>pm[b]-pm[a]);
   const totMaqKg = mq.reduce((a,m)=>a+pm[m],0)||1;
-  charts.pMaquina = new Chart(document.getElementById('pChartMaquina'), { type:'bar', data:{ labels:mq.map(m=>MAQ_NOMBRE[m]||m), datasets:[{ data:mq.map(m=>pm[m]), backgroundColor:'#1D9E75', borderRadius:6, barThickness:32 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMaqKg*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}, plugins:[ChartDataLabels]});
-  const pb={}; data.forEach(r=>pb[r.bodega]=(pb[r.bodega]||0)+r.peso);
+  charts.pMaquina = new Chart(document.getElementById('pChartMaquina'), { type:'bar', data:{ labels:mq.map(m=>MAQ_NOMBRE[m]||m), datasets:[{ data:mq.map(m=>pm[m]), backgroundColor:mq.map(m=>filtrosProd.maquina.size && !filtrosProd.maquina.has(m) ? '#3a3a3a' : '#1D9E75'), borderRadius:6, barThickness:32 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)toggleFiltroProd('maquina',mq[el[0].index]);},layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMaqKg*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}, plugins:[ChartDataLabels]});
+
+  // BODEGA: filtrado por todo excepto bodega
+  const dBod = dataExcepto('bodega');
+  const pb={}; dBod.forEach(r=>pb[r.bodega]=(pb[r.bodega]||0)+r.peso);
   const bd=Object.keys(pb).sort((a,b)=>pb[b]-pb[a]);
-  charts.pBodega = new Chart(document.getElementById('pChartBodega'), { type:'bar', data:{ labels:bd, datasets:[{ data:bd.map(b=>pb[b]), backgroundColor:['#1D9E75','#26C48E','#15806A','#1FB387'], borderRadius:6, barThickness:40 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
-  const po={}; data.forEach(r=>{if(!po[r.operador])po[r.operador]={f:0,k:0};po[r.operador].f++;po[r.operador].k+=r.peso;});
+  charts.pBodega = new Chart(document.getElementById('pChartBodega'), { type:'bar', data:{ labels:bd, datasets:[{ data:bd.map(b=>pb[b]), backgroundColor:bd.map((b,i)=>filtrosProd.bodega.size && !filtrosProd.bodega.has(b) ? '#3a3a3a' : ['#1D9E75','#26C48E','#15806A','#1FB387'][i%4]), borderRadius:6, barThickness:40 }]}, options:{responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)toggleFiltroProd('bodega',bd[el[0].index]);},plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+
+  // Ranking operadores (usa data totalmente filtrada)
+  const dataOp = dataKpi;
+  const po={}; dataOp.forEach(r=>{if(!po[r.operador])po[r.operador]={f:0,k:0};po[r.operador].f++;po[r.operador].k+=r.peso;});
   const ops=Object.entries(po).sort((a,b)=>b[1].k-a[1].k);
   const maxK=ops.length?ops[0][1].k:1;
   document.querySelector('#pTablaOp tbody').innerHTML = ops.length ? ops.map((e,i)=>{const n=e[0],d=e[1];const pr=Math.round(d.k/d.f);const pc=(d.k/maxK*100).toFixed(0);return '<tr><td><span class="rank ' + (i===0?'gold':'') + '">' + (i+1) + '</span>' + n + '</td><td>' + fmt(d.f) + '</td><td>' + fmt(d.k/1000) + ' t</td><td><div style="display:flex;align-items:center;gap:8px;"><div class="bar-mini" style="width:' + pc + '%;max-width:50px;"></div><span style="font-size:12px;color:var(--text3);">' + fmt(pr) + '</span></div></td></tr>';}).join('') : '<tr class="empty-row"><td colspan="4">Sin datos</td></tr>';
@@ -507,10 +578,11 @@ async function initProduccion() {
     dataProduccion = await cargarProduccion();
     filtradosProduccion = dataProduccion.slice();
     seleccionProduccion.clear();
+    Object.keys(filtrosProd).forEach(d => filtrosProd[d].clear());
     const operadores = [...new Set(dataProduccion.map(r=>r.operador))].sort();
     document.getElementById('p-operador').innerHTML = '<option value="">Todos</option>' + operadores.map(o=>'<option>'+o+'</option>').join('');
     renderTablaProduccion();
-    renderGraficosProduccion(filtradosProduccion);
+    renderGraficosProduccion(dataProduccion, filtradosProduccion);
   } catch(e){ document.getElementById('p-kpis').innerHTML='<div class="loading">Error: '+e.message+'</div>'; console.error(e); }
 }
 async function aplicarProduccion() {
@@ -519,8 +591,9 @@ async function aplicarProduccion() {
   document.getElementById('p-search').value = '';
   filtradosProduccion = dataProduccion.slice();
   seleccionProduccion.clear();
+  Object.keys(filtrosProd).forEach(d => filtrosProd[d].clear());
   renderTablaProduccion();
-  renderGraficosProduccion(filtradosProduccion);
+  renderGraficosProduccion(dataProduccion, filtradosProduccion);
 }
 function resetProduccion() { ['p-desde','p-hasta','p-bodega','p-material','p-operador','p-maquina','p-turno','p-search'].forEach(id=>document.getElementById(id).value=''); aplicarProduccion(); }
 
@@ -747,45 +820,127 @@ async function aplicarOperaciones() {
 function resetOperaciones() { ['o-desde','o-hasta','o-bodega','o-material','o-tipo','o-search'].forEach(id=>document.getElementById(id).value=''); aplicarOperaciones(); }
 
 // ════ COMERCIAL ════
+let dataStock = [];           // todos los fardos en stock
+let filtradosStock = [];      // tras buscador
+let filtroInvStock = null;    // {material, bodega} si se clickeó una celda del inventario
+
 async function initStock() {
   const p = id => document.getElementById(id).value;
   try {
     const fb = p('s-bodega'), fm = p('s-material');
-    let q = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false&anulado=neq.true';
+    let q = 'pesaje_data?select=folio,peso,material_code,bodega,timestamp&despachado=eq.false&anulado=neq.true&order=id.desc';
     if (fb) q += '&bodega=eq.' + encodeURIComponent(fb);
     if (fm) q += '&material_code=eq.' + fm;
-    const stock = await paginado(q);
+    dataStock = await paginado(q);
+    filtroInvStock = null;
+    filtradosStock = dataStock.slice();
+    document.getElementById('s-search').value = '';
 
-    const kgTotal = stock.reduce((a,r)=>a+r.peso,0);
-    const porMat = {}; stock.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
+    const kgTotal = dataStock.reduce((a,r)=>a+r.peso,0);
+    const porMat = {}; dataStock.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
     const matTop = Object.entries(porMat).sort((a,b)=>b[1]-a[1])[0];
-    const porBod = {}; stock.forEach(r=>porBod[r.bodega]=(porBod[r.bodega]||0)+r.peso);
+    const porBod = {}; dataStock.forEach(r=>porBod[r.bodega]=(porBod[r.bodega]||0)+r.peso);
     const bodTop = Object.entries(porBod).sort((a,b)=>b[1]-a[1])[0];
     const nMats = Object.keys(porMat).length;
 
     document.getElementById('s-kpis').innerHTML =
-      '<div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">' + fmt(kgTotal/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(stock.length) + ' fardos</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">' + fmt(kgTotal/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(dataStock.length) + ' fardos</div></div>' +
       '<div class="kpi amber"><div class="kpi-label">Material con más stock</div><div class="kpi-value" style="font-size:22px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmt(matTop[1]/1000)+' ton':'') + '</div></div>' +
       '<div class="kpi amber"><div class="kpi-label">Bodega con más stock</div><div class="kpi-value" style="font-size:22px;">' + (bodTop?bodTop[0]:'—') + '</div><div class="kpi-sub">' + (bodTop?fmt(bodTop[1]/1000)+' ton':'') + '</div></div>' +
       '<div class="kpi amber"><div class="kpi-label">Variedad en stock</div><div class="kpi-value">' + nMats + '<span class="kpi-unit">mat.</span></div><div class="kpi-sub">tipos distintos</div></div>';
 
-    destruirCharts('s');
-    // Stock por bodega (barras verticales)
-    const sb={}; BODEGAS.forEach(b=>sb[b]=0); stock.forEach(r=>{if(sb[r.bodega]!==undefined)sb[r.bodega]+=r.peso;});
-    charts.sBodega = new Chart(document.getElementById('sChartBodega'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#F59E0B', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
-    // Stock por material (barras horizontales con %)
-    const mk=Object.keys(porMat).sort((a,b)=>porMat[b]-porMat[a]);
-    const totMk=mk.reduce((a,m)=>a+porMat[m],0)||1;
-    charts.sMaterial = new Chart(document.getElementById('sChartMaterial'), { type:'bar', data:{ labels:mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:mk.map(m=>porMat[m]), backgroundColor:mk.map(m=>COLORS[m]), borderRadius:6, barThickness:18 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMk*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}, plugins:[ChartDataLabels]});
-
-    // Tabla inventario detallado
-    const grid={}; const materiales=Object.keys(MAT_NOMBRE);
-    materiales.forEach(m=>grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0});
-    stock.forEach(r=>{if(grid[r.material_code])grid[r.material_code][r.bodega]+=r.peso;});
-    const matsConStock = materiales.filter(m=>BODEGAS.reduce((a,b)=>a+grid[m][b],0)>0)
-                                   .sort((a,b)=>BODEGAS.reduce((x,bo)=>x+grid[b][bo],0)-BODEGAS.reduce((x,bo)=>x+grid[a][bo],0));
-    document.querySelector('#sTablaInv tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td><td>'+fmt(fila['Renca']/1000)+' t</td><td>'+fmt(fila['Maipú']/1000)+' t</td><td>'+fmt(fila['La Pintana']/1000)+' t</td><td>'+fmt(fila['Talcahuano']/1000)+' t</td><td style="font-weight:600;">'+fmt(tot/1000)+' t</td></tr>';}).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
+    renderInventarioStock();
+    renderTablaStock();
+    renderGraficosStock();
   } catch(e){ document.getElementById('s-kpis').innerHTML='<div class="loading">Error: '+e.message+'</div>'; console.error(e); }
+}
+
+// Inventario detallado (material × bodega) — cada celda con dato es clickeable
+function renderInventarioStock() {
+  const grid={}; const materiales=Object.keys(MAT_NOMBRE);
+  materiales.forEach(m=>grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0});
+  dataStock.forEach(r=>{if(grid[r.material_code])grid[r.material_code][r.bodega]+=r.peso;});
+  const matsConStock = materiales.filter(m=>BODEGAS.reduce((a,b)=>a+grid[m][b],0)>0)
+                                 .sort((a,b)=>BODEGAS.reduce((x,bo)=>x+grid[b][bo],0)-BODEGAS.reduce((x,bo)=>x+grid[a][bo],0));
+  const celda = (m, bod, val) => {
+    if (val <= 0) return '<td style="color:#444;">—</td>';
+    const activo = filtroInvStock && filtroInvStock.material===m && filtroInvStock.bodega===bod;
+    return '<td style="cursor:pointer;' + (activo?'background:#2a2410;color:#F59E0B;font-weight:700;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'' + bod + '\')">' + fmt(val/1000) + ' t</td>';
+  };
+  const filaTotal = (m) => {
+    const tot = BODEGAS.reduce((a,b)=>a+grid[m][b],0);
+    const activo = filtroInvStock && filtroInvStock.material===m && !filtroInvStock.bodega;
+    return '<td style="cursor:pointer;font-weight:600;' + (activo?'background:#2a2410;color:#F59E0B;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'\')">' + fmt(tot/1000) + ' t</td>';
+  };
+  document.querySelector('#sTablaInv tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>
+    '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td>' +
+    celda(m,'Renca',grid[m]['Renca']) + celda(m,'Maipú',grid[m]['Maipú']) + celda(m,'La Pintana',grid[m]['La Pintana']) + celda(m,'Talcahuano',grid[m]['Talcahuano']) +
+    filaTotal(m) + '</tr>'
+  ).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
+}
+
+// Al hacer clic en una celda del inventario, filtra la tabla maestra de abajo
+function filtrarPorInventario(material, bodega) {
+  // Si ya está activo el mismo filtro, lo quita (toggle)
+  if (filtroInvStock && filtroInvStock.material===material && filtroInvStock.bodega===(bodega||'')) {
+    filtroInvStock = null;
+  } else {
+    filtroInvStock = { material, bodega: bodega||'' };
+  }
+  aplicarFiltrosStock();
+  renderInventarioStock();
+}
+
+function aplicarFiltrosStock() {
+  let base = dataStock.slice();
+  if (filtroInvStock) {
+    base = base.filter(r => r.material_code===filtroInvStock.material && (!filtroInvStock.bodega || r.bodega===filtroInvStock.bodega));
+  }
+  const q = document.getElementById('s-search').value.toLowerCase().trim();
+  if (q) {
+    base = base.filter(r =>
+      (r.folio||'').toLowerCase().includes(q) ||
+      (MAT_NOMBRE[r.material_code]||'').toLowerCase().includes(q) ||
+      (r.material_code||'').toLowerCase().includes(q) ||
+      (r.bodega||'').toLowerCase().includes(q));
+  }
+  filtradosStock = base;
+  renderTablaStock();
+}
+
+function filtrarTablaStock() { aplicarFiltrosStock(); }
+
+function limpiarFiltroStock() {
+  filtroInvStock = null;
+  document.getElementById('s-search').value = '';
+  filtradosStock = dataStock.slice();
+  renderTablaStock();
+  renderInventarioStock();
+}
+
+function renderTablaStock() {
+  const tbody = document.getElementById('s-tbody');
+  const data = filtradosStock.slice(0, 500);
+  tbody.innerHTML = data.length ? data.map(r =>
+    '<tr><td class="mono">' + r.folio + '</td><td>' + fmt(r.peso) + ' kg</td>' +
+    '<td>' + (MAT_NOMBRE[r.material_code]||r.material_code) + '</td><td>' + r.bodega + '</td>' +
+    '<td>' + fechaCorta(r.timestamp) + '</td></tr>'
+  ).join('') : '<tr class="empty-row"><td colspan="5">Sin fardos</td></tr>';
+  const totalTxt = filtradosStock.length === dataStock.length ? fmt(dataStock.length) + ' fardos' : fmt(filtradosStock.length) + ' de ' + fmt(dataStock.length);
+  document.getElementById('s-table-info').textContent = totalTxt + (data.length < filtradosStock.length ? ' (mostrando 500)' : '');
+  document.getElementById('s-sel-count').textContent = filtroInvStock ? 1 : 0;
+}
+
+function renderGraficosStock() {
+  destruirCharts('s');
+  const porMat = {}; dataStock.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
+  // Stock por bodega
+  const sb={}; BODEGAS.forEach(b=>sb[b]=0); dataStock.forEach(r=>{if(sb[r.bodega]!==undefined)sb[r.bodega]+=r.peso;});
+  charts.sBodega = new Chart(document.getElementById('sChartBodega'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#F59E0B', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+  // Stock por material (todos, ordenados mayor arriba, % a la derecha)
+  const mk=Object.keys(porMat).sort((a,b)=>porMat[a]-porMat[b]);
+  const totMk=mk.reduce((a,m)=>a+porMat[m],0)||1;
+  charts.sMaterial = new Chart(document.getElementById('sChartMaterial'), { type:'bar', data:{ labels:mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:mk.map(m=>porMat[m]), backgroundColor:mk.map(m=>COLORS[m]), borderRadius:5, barThickness:14 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:9,weight:'600'},formatter:(v)=>(v/totMk*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false},ticks:{font:{size:9}}}}}, plugins:[ChartDataLabels]});
 }
 
 async function initComercial() {
