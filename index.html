@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>GreenTrack · Dashboards</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -118,6 +119,7 @@
 </header>
 <nav>
   <button class="active" onclick="cambiarVista('produccion', this)">Producción</button>
+  <button onclick="cambiarVista('stock', this)">Stock</button>
   <button onclick="cambiarVista('operaciones', this)">Operaciones</button>
   <button onclick="cambiarVista('comercial', this)">Comercial</button>
 </nav>
@@ -146,6 +148,7 @@
         <div class="master-title">Registros de producción <span id="p-table-info"></span></div>
         <div class="search-wrap"><span class="search-icon">🔍</span>
           <input type="text" id="p-search" placeholder="Buscar por folio, operador, material..." oninput="filtrarTablaProduccion()"/></div>
+        <button id="btn-anulados" onclick="toggleAnulados()" style="background:none;border:1px solid #444;color:#888;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;white-space:nowrap;">Ver anulados</button>
         <div class="selection-bar"><span><span class="count" id="p-sel-count">0</span> seleccionados</span>
           <button class="btn-clear-sel" onclick="limpiarSeleccionProduccion()">Limpiar</button></div>
       </div>
@@ -166,6 +169,25 @@
       <div class="card"><div class="card-title">Ranking operadores <span class="sub">por producción</span></div>
         <table id="pTablaOp"><thead><tr><th>Operador</th><th>Fardos</th><th>Kilos</th><th>Prom.</th></tr></thead><tbody></tbody></table></div>
       <div class="card"><div class="card-title">Por bodega <span class="sub">kg total</span></div><div class="chart-box"><canvas id="pChartBodega"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- STOCK -->
+  <div class="view" id="view-stock">
+    <div class="filters">
+      <div class="filter-group"><label>Bodega</label>
+        <select id="s-bodega" onchange="initStock()"><option value="">Todas</option><option>Renca</option><option>Maipú</option><option>La Pintana</option><option>Talcahuano</option></select></div>
+      <div class="filter-group"><label>Material</label>
+        <select id="s-material" onchange="initStock()"><option value="">Todos</option></select></div>
+    </div>
+    <div id="s-kpis" class="kpis"><div class="loading">Cargando...</div></div>
+    <div class="grid grid-2">
+      <div class="card"><div class="card-title">Stock por bodega <span class="sub">kg disponible</span></div><div class="chart-box"><canvas id="sChartBodega"></canvas></div></div>
+      <div class="card"><div class="card-title">Stock por material <span class="sub">kg disponible</span></div><div class="chart-box tall"><canvas id="sChartMaterial"></canvas></div></div>
+    </div>
+    <div class="master-card">
+      <div class="master-head"><div class="master-title">Inventario detallado <span class="sub">material × bodega</span></div></div>
+      <div class="table-scroll"><table id="sTablaInv"><thead><tr><th>Material</th><th>Renca</th><th>Maipú</th><th>La Pintana</th><th>Talcahuano</th><th>Total</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 
@@ -211,15 +233,11 @@
       </table></div>
     </div>
     <div class="grid">
-      <div class="card"><div class="card-title">Producción vs Despacho <span class="sub">kg por día</span></div><div class="chart-box tall"><canvas id="oChartFlujo"></canvas></div></div>
+      <div class="card"><div class="card-title">Despachos en el tiempo <span class="sub">kg por día</span></div><div class="chart-box tall"><canvas id="oChartFlujo"></canvas></div></div>
     </div>
     <div class="grid grid-2">
       <div class="card"><div class="card-title">Despachos por tipo <span class="sub">nacional vs internacional</span></div><div class="chart-box"><canvas id="oChartTipo"></canvas></div></div>
       <div class="card"><div class="card-title">Despachos por destino <span class="sub">kg</span></div><div class="chart-box"><canvas id="oChartDestino"></canvas></div></div>
-    </div>
-    <div class="grid grid-2">
-      <div class="card"><div class="card-title">Stock por bodega <span class="sub">kg inventario</span></div><div class="chart-box"><canvas id="oChartStockBod"></canvas></div></div>
-      <div class="card"><div class="card-title">Stock por material <span class="sub">kg disponible</span></div><div class="chart-box"><canvas id="oChartStockMat"></canvas></div></div>
     </div>
   </div>
 
@@ -247,6 +265,14 @@
     <div class="master-card">
       <div class="master-head"><div class="master-title">Inventario detallado <span class="sub">material × bodega</span></div></div>
       <table id="cTablaStock"><thead><tr><th>Material</th><th>Renca</th><th>Maipú</th><th>La Pintana</th><th>Talcahuano</th><th>Total</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="master-card">
+      <div class="master-head"><div class="master-title">Últimos despachos <span class="sub">salidas recientes</span></div></div>
+      <div class="table-scroll"><table id="cTablaDespachos">
+        <thead><tr><th>Fecha</th><th>Destino</th><th>Tipo</th><th>Material</th><th>Peso</th><th>Transportista</th><th>Patente</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
     </div>
   </div>
 
@@ -279,14 +305,19 @@ const MAQ_NOMBRE = {
 const BODEGAS = ['Renca', 'Maipú', 'La Pintana', 'Talcahuano'];
 Chart.defaults.color = '#8B9591';
 Chart.defaults.borderColor = '#232927';
+// El plugin datalabels NO se registra globalmente: se pasa por gráfico (plugins:[ChartDataLabels]).
+// Así solo aparece en las barras donde lo queremos, no en líneas/donas.
+if (window.ChartDataLabels) { Chart.defaults.plugins.datalabels = { display: false }; }
 
 let charts = {};
-let cargado = { produccion: false, operaciones: false, comercial: false };
+let cargado = { produccion: false, stock: false, operaciones: false, comercial: false };
 let dataProduccion = [], filtradosProduccion = [], seleccionProduccion = new Set();
 let prodOperaciones = [], stockOperaciones = [];
+let prodIndexPorFolio = {};  // folio -> fardo de producción (para cruzar fechas)
 
 const BRAND = {
   produccion: { icon: '🏭', sub: 'Dashboard de Producción', color: 'linear-gradient(135deg,#1D9E75,#26C48E)' },
+  stock: { icon: '📦', sub: 'Dashboard de Stock', color: 'linear-gradient(135deg,#F59E0B,#D97706)' },
   operaciones: { icon: '📊', sub: 'Dashboard de Operaciones', color: 'linear-gradient(135deg,#6BA4F5,#4A7FD4)' },
   comercial: { icon: '💰', sub: 'Dashboard Comercial', color: 'linear-gradient(135deg,#D4AF37,#B8941F)' }
 };
@@ -322,6 +353,7 @@ function cambiarVista(vista, btn) {
   document.getElementById('brand-sub').textContent = b.sub;
   if (!cargado[vista]) {
     if (vista === 'produccion') initProduccion();
+    if (vista === 'stock') initStock();
     if (vista === 'operaciones') initOperaciones();
     if (vista === 'comercial') initComercial();
     cargado[vista] = true;
@@ -329,8 +361,26 @@ function cambiarVista(vista, btn) {
 }
 
 // ════ PRODUCCIÓN ════
+let mostrarAnulados = false;  // por default NUNCA se muestran
+// Alternar entre mostrar/ocultar fardos anulados (solo en tabla de producción)
+function toggleAnulados() {
+  mostrarAnulados = !mostrarAnulados;
+  const btn = document.getElementById('btn-anulados');
+  if (mostrarAnulados) {
+    btn.textContent = 'Ocultar anulados';
+    btn.style.borderColor = '#DC2626';
+    btn.style.color = '#DC2626';
+  } else {
+    btn.textContent = 'Ver anulados';
+    btn.style.borderColor = '#444';
+    btn.style.color = '#888';
+  }
+  aplicarProduccion();  // recargar la tabla con/sin anulados
+}
 async function cargarProduccion(f = {}) {
-  let q = 'pesaje_data?select=folio,peso,material_code,bodega,operador,maquina,turno,timestamp&order=timestamp.desc';
+  let q = 'pesaje_data?select=folio,peso,material_code,bodega,operador,maquina,turno,timestamp,anulado&order=timestamp.desc';
+  // Por default ocultar anulados (como si no existieran). Solo se muestran si se activa el toggle.
+  if (!mostrarAnulados) q += '&anulado=neq.true';
   if (f.desde) q += '&timestamp=gte.' + f.desde + 'T00:00:00';
   if (f.hasta) q += '&timestamp=lte.' + f.hasta + 'T23:59:59';
   if (f.bodega) q += '&bodega=eq.' + encodeURIComponent(f.bodega);
@@ -353,8 +403,11 @@ function renderTablaProduccion() {
     tbody.innerHTML = data.map(r => {
       const sel = seleccionProduccion.has(r.folio) ? 'selected' : '';
       const tc = r.turno==='Mañana'?'badge-m':r.turno==='Tarde'?'badge-t':'badge-n';
-      return '<tr class="' + sel + '" onclick="toggleFilaProduccion(\'' + r.folio + '\')">' +
-        '<td class="mono">' + r.folio + '</td><td>' + r.peso + ' kg</td>' +
+      const esAnulado = r.anulado === true;
+      const estiloAnul = esAnulado ? ' style="opacity:0.5;text-decoration:line-through;"' : '';
+      const marcaAnul = esAnulado ? ' <span style="color:#DC2626;font-size:10px;font-weight:700;text-decoration:none;display:inline-block;">ANULADO</span>' : '';
+      return '<tr class="' + sel + '"' + estiloAnul + ' onclick="toggleFilaProduccion(\'' + r.folio + '\')">' +
+        '<td class="mono">' + r.folio + marcaAnul + '</td><td>' + r.peso + ' kg</td>' +
         '<td>' + (MAT_NOMBRE[r.material_code]||r.material_code) + '</td><td>' + r.bodega + '</td>' +
         '<td>' + r.operador + '</td><td>' + (MAQ_NOMBRE[r.maquina]||r.maquina) + '</td>' +
         '<td><span class="badge ' + tc + '">' + r.turno + '</span></td>' +
@@ -396,21 +449,51 @@ function renderGraficosProduccion(data) {
   const promDia = dias.size ? Math.round(totKilos/dias.size) : 0;
   const porMat = {}; data.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
   const matTop = Object.entries(porMat).sort((a,b)=>b[1]-a[1])[0];
+
+  // ── Tendencias: hoy vs ayer, esta semana vs anterior ──
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const ayer = new Date(hoy); ayer.setDate(ayer.getDate()-1);
+  const finSemana = new Date(hoy); finSemana.setDate(finSemana.getDate()+1); // mañana 00:00
+  const iniSemana = new Date(hoy); iniSemana.setDate(iniSemana.getDate()-6); // últimos 7 días
+  const iniSemanaPrev = new Date(iniSemana); iniSemanaPrev.setDate(iniSemanaPrev.getDate()-7);
+
+  const kgEntre = (desde, hasta) => data.reduce((a,r)=>{
+    if(!r.timestamp) return a;
+    const t = new Date(r.timestamp);
+    return (t>=desde && t<hasta) ? a+r.peso : a;
+  },0);
+
+  const kgHoy = kgEntre(hoy, finSemana);
+  const kgAyer = kgEntre(ayer, hoy);
+  const kgSem = kgEntre(iniSemana, finSemana);
+  const kgSemPrev = kgEntre(iniSemanaPrev, iniSemana);
+
+  // Helpers de variación con flecha y color
+  const variacion = (actual, previo) => {
+    if (previo === 0) return actual > 0 ? '<span style="color:#26C48E;">↑ nuevo</span>' : '<span style="color:#888;">—</span>';
+    const pct = ((actual - previo) / previo) * 100;
+    const flecha = pct >= 0 ? '↑' : '↓';
+    const color = pct >= 0 ? '#26C48E' : '#F87171';
+    return '<span style="color:' + color + ';">' + flecha + ' ' + Math.abs(pct).toFixed(0) + '%</span>';
+  };
+
   document.getElementById('p-kpis').innerHTML =
     '<div class="kpi green"><div class="kpi-label">Producción total</div><div class="kpi-value">' + fmt(totKilos/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(totFardos) + ' fardos</div></div>' +
-    '<div class="kpi green"><div class="kpi-label">Promedio por fardo</div><div class="kpi-value">' + fmt(prom) + '<span class="kpi-unit">kg</span></div><div class="kpi-sub">por unidad</div></div>' +
-    '<div class="kpi green"><div class="kpi-label">Promedio diario</div><div class="kpi-value">' + fmt(promDia/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + dias.size + ' días</div></div>' +
+    '<div class="kpi green"><div class="kpi-label">Hoy</div><div class="kpi-value">' + fmt(kgHoy/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs ayer ' + variacion(kgHoy, kgAyer) + '</div></div>' +
+    '<div class="kpi green"><div class="kpi-label">Últimos 7 días</div><div class="kpi-value">' + fmt(kgSem/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs semana previa ' + variacion(kgSem, kgSemPrev) + '</div></div>' +
     '<div class="kpi green"><div class="kpi-label">Material principal</div><div class="kpi-value" style="font-size:24px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmt(matTop[1]/1000)+' ton':'') + '</div></div>';
   const porDia = {}; data.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];porDia[d]=(porDia[d]||0)+r.peso;});
   const ds = Object.keys(porDia).sort();
   charts.pTiempo = new Chart(document.getElementById('pChartTiempo'), { type:'line', data:{ labels: ds.map(d=>{const a=d.split('-');return a[2]+'/'+a[1];}), datasets:[{ data: ds.map(d=>porDia[d]), borderColor:'#26C48E', backgroundColor:'rgba(38,196,142,0.08)', fill:true, tension:0.3, pointRadius: ds.length<40?3:0, borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:10}}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
   const mk = Object.keys(porMat);
-  charts.pMaterial = new Chart(document.getElementById('pChartMaterial'), { type:'doughnut', data:{ labels: mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data: mk.map(m=>porMat[m]), backgroundColor: mk.map(m=>COLORS[m]), borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,font:{size:11}}}},cutout:'60%'}});
+  const totMatKg = mk.reduce((a,m)=>a+porMat[m],0)||1;
+  charts.pMaterial = new Chart(document.getElementById('pChartMaterial'), { type:'bar', data:{ labels: mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data: mk.map(m=>porMat[m]), backgroundColor: mk.map(m=>COLORS[m]), borderRadius:6, barThickness:18 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMatKg*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}, plugins:[ChartDataLabels]});
   const pt={'Mañana':0,'Tarde':0,'Noche':0}; data.forEach(r=>pt[r.turno]=(pt[r.turno]||0)+r.peso);
   charts.pTurno = new Chart(document.getElementById('pChartTurno'), { type:'bar', data:{ labels:['Mañana','Tarde','Noche'], datasets:[{ data:[pt['Mañana'],pt['Tarde'],pt['Noche']], backgroundColor:['#F59E0B','#6BA4F5','#A78BFA'], borderRadius:8, barThickness:60 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
   const pm={}; data.forEach(r=>pm[r.maquina]=(pm[r.maquina]||0)+r.peso);
   const mq=Object.keys(pm).sort((a,b)=>pm[b]-pm[a]);
-  charts.pMaquina = new Chart(document.getElementById('pChartMaquina'), { type:'bar', data:{ labels:mq.map(m=>MAQ_NOMBRE[m]||m), datasets:[{ data:mq.map(m=>pm[m]), backgroundColor:'#1D9E75', borderRadius:6, barThickness:32 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}});
+  const totMaqKg = mq.reduce((a,m)=>a+pm[m],0)||1;
+  charts.pMaquina = new Chart(document.getElementById('pChartMaquina'), { type:'bar', data:{ labels:mq.map(m=>MAQ_NOMBRE[m]||m), datasets:[{ data:mq.map(m=>pm[m]), backgroundColor:'#1D9E75', borderRadius:6, barThickness:32 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMaqKg*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}, plugins:[ChartDataLabels]});
   const pb={}; data.forEach(r=>pb[r.bodega]=(pb[r.bodega]||0)+r.peso);
   const bd=Object.keys(pb).sort((a,b)=>pb[b]-pb[a]);
   charts.pBodega = new Chart(document.getElementById('pChartBodega'), { type:'bar', data:{ labels:bd, datasets:[{ data:bd.map(b=>pb[b]), backgroundColor:['#1D9E75','#26C48E','#15806A','#1FB387'], borderRadius:6, barThickness:40 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
@@ -458,7 +541,7 @@ async function cargarOpDespachos(f = {}) {
   return paginado(q);
 }
 async function cargarOpProduccion(f = {}) {
-  let q = 'pesaje_data?select=peso,timestamp&order=timestamp.asc';
+  let q = 'pesaje_data?select=folio,peso,timestamp&anulado=neq.true&order=timestamp.asc';
   if (f.desde) q += '&timestamp=gte.' + f.desde + 'T00:00:00';
   if (f.hasta) q += '&timestamp=lte.' + f.hasta + 'T23:59:59';
   if (f.bodega) q += '&bodega=eq.' + encodeURIComponent(f.bodega);
@@ -466,7 +549,7 @@ async function cargarOpProduccion(f = {}) {
   return paginado(q);
 }
 async function cargarOpStock(f = {}) {
-  let q = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false';
+  let q = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false&anulado=neq.true';
   if (f.bodega) q += '&bodega=eq.' + encodeURIComponent(f.bodega);
   if (f.material) q += '&material_code=eq.' + f.material;
   return paginado(q);
@@ -605,27 +688,40 @@ function limpiarSeleccionDespachos() {
 function renderGraficosOperaciones(desp) {
   destruirCharts('o');
   const kgD=desp.reduce((a,r)=>a+r.peso,0);
-  const kgP=prodOperaciones.reduce((a,r)=>a+r.peso,0);
-  const kgS=stockOperaciones.reduce((a,r)=>a+r.peso,0);
   const containers=new Set(desp.map(d=>d.codigo_container||('SIN-'+d.id))).size;
+  const promPorDespacho = containers ? kgD/containers : 0;
+
+  // Días promedio producción -> despacho (cruzar folio: fecha despacho vs fecha producción)
+  let sumaDias = 0, conDato = 0;
+  desp.forEach(d => {
+    const fardo = prodIndexPorFolio[d.folio];
+    if (fardo && fardo.timestamp && d.timestamp) {
+      const tProd = new Date(fardo.timestamp), tDesp = new Date(d.timestamp);
+      const dias = (tDesp - tProd) / (1000*60*60*24);
+      if (dias >= 0 && dias < 365) { sumaDias += dias; conDato++; }
+    }
+  });
+  const diasProm = conDato ? (sumaDias/conDato) : 0;
+
   document.getElementById('o-kpis').innerHTML =
-    '<div class="kpi green"><div class="kpi-label">Producido</div><div class="kpi-value">' + fmt(kgP/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(prodOperaciones.length) + ' fardos</div></div>' +
-    '<div class="kpi blue"><div class="kpi-label">Despachado</div><div class="kpi-value">' + fmt(kgD/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(desp.length) + ' fardos · ' + containers + ' despachos</div></div>' +
-    '<div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">' + fmt(kgS/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(stockOperaciones.length) + ' fardos</div></div>' +
-    '<div class="kpi purple"><div class="kpi-label">Rotación</div><div class="kpi-value">' + (kgP?((kgD/kgP)*100).toFixed(0):0) + '<span class="kpi-unit">%</span></div><div class="kpi-sub">despachado / producido</div></div>';
-  const pd={},dd={}; prodOperaciones.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];pd[d]=(pd[d]||0)+r.peso;}); desp.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];dd[d]=(dd[d]||0)+r.peso;});
-  const dias=[...new Set([...Object.keys(pd),...Object.keys(dd)])].sort();
-  charts.oFlujo = new Chart(document.getElementById('oChartFlujo'), { type:'line', data:{ labels:dias.map(d=>{const a=d.split('-');return a[2]+'/'+a[1];}), datasets:[{label:'Producción',data:dias.map(d=>pd[d]||0),borderColor:'#26C48E',backgroundColor:'rgba(38,196,142,0.06)',fill:true,tension:0.3,pointRadius:0,borderWidth:2},{label:'Despacho',data:dias.map(d=>dd[d]||0),borderColor:'#6BA4F5',backgroundColor:'rgba(107,164,245,0.06)',fill:true,tension:0.3,pointRadius: dias.length<40?3:0,borderWidth:2}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{usePointStyle:true,padding:16}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:10}}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+    '<div class="kpi blue"><div class="kpi-label">Despachado total</div><div class="kpi-value">' + fmt(kgD/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(desp.length) + ' fardos</div></div>' +
+    '<div class="kpi blue"><div class="kpi-label">Nº despachos</div><div class="kpi-value">' + fmt(containers) + '</div><div class="kpi-sub">camiones / containers</div></div>' +
+    '<div class="kpi blue"><div class="kpi-label">Promedio por despacho</div><div class="kpi-value">' + fmt(promPorDespacho/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">kg por camión</div></div>' +
+    '<div class="kpi purple"><div class="kpi-label">Días prod→despacho</div><div class="kpi-value">' + (diasProm ? diasProm.toFixed(1) : '—') + '<span class="kpi-unit">días</span></div><div class="kpi-sub">tiempo en bodega</div></div>';
+
+  // Línea SOLO de despachos (responde a los filtros de arriba)
+  const dd={}; desp.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];dd[d]=(dd[d]||0)+r.peso;});
+  const dias=Object.keys(dd).sort();
+  charts.oFlujo = new Chart(document.getElementById('oChartFlujo'), { type:'line', data:{ labels:dias.map(d=>{const a=d.split('-');return a[2]+'/'+a[1];}), datasets:[{label:'Despachado',data:dias.map(d=>dd[d]||0),borderColor:'#6BA4F5',backgroundColor:'rgba(107,164,245,0.08)',fill:true,tension:0.3,pointRadius: dias.length<40?3:0,borderWidth:2}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:14,font:{size:10}}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+
   const pt={}; desp.forEach(r=>pt[r.tipo_despacho]=(pt[r.tipo_despacho]||0)+r.peso);
-  charts.oTipo = new Chart(document.getElementById('oChartTipo'), { type:'doughnut', data:{ labels:Object.keys(pt), datasets:[{ data:Object.values(pt), backgroundColor:['#26C48E','#6BA4F5'], borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:14}}},cutout:'62%'}});
+  const ptk=Object.keys(pt).sort((a,b)=>pt[b]-pt[a]);
+  const totTipo=ptk.reduce((a,k)=>a+pt[k],0)||1;
+  charts.oTipo = new Chart(document.getElementById('oChartTipo'), { type:'bar', data:{ labels:ptk, datasets:[{ data:ptk.map(k=>pt[k]), backgroundColor:ptk.map((k,i)=>['#26C48E','#6BA4F5','#F59E0B'][i%3]), borderRadius:6, barThickness:36 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:11,weight:'600'},formatter:(v)=>(v/totTipo*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}, plugins:[ChartDataLabels]});
   const pdest={}; desp.forEach(r=>pdest[r.destino]=(pdest[r.destino]||0)+r.peso);
   const dests=Object.keys(pdest).sort((a,b)=>pdest[b]-pdest[a]);
-  charts.oDestino = new Chart(document.getElementById('oChartDestino'), { type:'bar', data:{ labels:dests, datasets:[{ data:dests.map(d=>pdest[d]), backgroundColor:'#6BA4F5', borderRadius:6, barThickness:34 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}});
-  const sb={}; BODEGAS.forEach(b=>sb[b]=0); stockOperaciones.forEach(r=>sb[r.bodega]=(sb[r.bodega]||0)+r.peso);
-  charts.oStockBod = new Chart(document.getElementById('oChartStockBod'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#F59E0B', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
-  const sm={}; stockOperaciones.forEach(r=>sm[r.material_code]=(sm[r.material_code]||0)+r.peso);
-  const smk=Object.keys(sm);
-  charts.oStockMat = new Chart(document.getElementById('oChartStockMat'), { type:'doughnut', data:{ labels:smk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:smk.map(m=>sm[m]), backgroundColor:smk.map(m=>COLORS[m]), borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:12}}},cutout:'60%'}});
+  const totDest=dests.reduce((a,d)=>a+pdest[d],0)||1;
+  charts.oDestino = new Chart(document.getElementById('oChartDestino'), { type:'bar', data:{ labels:dests, datasets:[{ data:dests.map(d=>pdest[d]), backgroundColor:'#6BA4F5', borderRadius:6, barThickness:34 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totDest*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false}}}}, plugins:[ChartDataLabels]});
 }
 
 async function initOperaciones() { await aplicarOperaciones(); }
@@ -635,6 +731,9 @@ async function aplicarOperaciones() {
     dataDespachosRaw = await cargarOpDespachos(f);
     prodOperaciones = await cargarOpProduccion(f);
     stockOperaciones = await cargarOpStock({bodega:f.bodega,material:f.material});
+    // Índice folio -> fardo de producción (para cruzar fecha prod vs despacho)
+    prodIndexPorFolio = {};
+    prodOperaciones.forEach(r => { if (r.folio) prodIndexPorFolio[r.folio] = r; });
     despachosAgrupados = agruparPorContainer(dataDespachosRaw);
     document.getElementById('o-search').value = '';
     filtradosDespachos = despachosAgrupados.slice();
@@ -648,15 +747,56 @@ async function aplicarOperaciones() {
 function resetOperaciones() { ['o-desde','o-hasta','o-bodega','o-material','o-tipo','o-search'].forEach(id=>document.getElementById(id).value=''); aplicarOperaciones(); }
 
 // ════ COMERCIAL ════
+async function initStock() {
+  const p = id => document.getElementById(id).value;
+  try {
+    const fb = p('s-bodega'), fm = p('s-material');
+    let q = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false&anulado=neq.true';
+    if (fb) q += '&bodega=eq.' + encodeURIComponent(fb);
+    if (fm) q += '&material_code=eq.' + fm;
+    const stock = await paginado(q);
+
+    const kgTotal = stock.reduce((a,r)=>a+r.peso,0);
+    const porMat = {}; stock.forEach(r=>porMat[r.material_code]=(porMat[r.material_code]||0)+r.peso);
+    const matTop = Object.entries(porMat).sort((a,b)=>b[1]-a[1])[0];
+    const porBod = {}; stock.forEach(r=>porBod[r.bodega]=(porBod[r.bodega]||0)+r.peso);
+    const bodTop = Object.entries(porBod).sort((a,b)=>b[1]-a[1])[0];
+    const nMats = Object.keys(porMat).length;
+
+    document.getElementById('s-kpis').innerHTML =
+      '<div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">' + fmt(kgTotal/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(stock.length) + ' fardos</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Material con más stock</div><div class="kpi-value" style="font-size:22px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmt(matTop[1]/1000)+' ton':'') + '</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Bodega con más stock</div><div class="kpi-value" style="font-size:22px;">' + (bodTop?bodTop[0]:'—') + '</div><div class="kpi-sub">' + (bodTop?fmt(bodTop[1]/1000)+' ton':'') + '</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Variedad en stock</div><div class="kpi-value">' + nMats + '<span class="kpi-unit">mat.</span></div><div class="kpi-sub">tipos distintos</div></div>';
+
+    destruirCharts('s');
+    // Stock por bodega (barras verticales)
+    const sb={}; BODEGAS.forEach(b=>sb[b]=0); stock.forEach(r=>{if(sb[r.bodega]!==undefined)sb[r.bodega]+=r.peso;});
+    charts.sBodega = new Chart(document.getElementById('sChartBodega'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#F59E0B', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
+    // Stock por material (barras horizontales con %)
+    const mk=Object.keys(porMat).sort((a,b)=>porMat[b]-porMat[a]);
+    const totMk=mk.reduce((a,m)=>a+porMat[m],0)||1;
+    charts.sMaterial = new Chart(document.getElementById('sChartMaterial'), { type:'bar', data:{ labels:mk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:mk.map(m=>porMat[m]), backgroundColor:mk.map(m=>COLORS[m]), borderRadius:6, barThickness:18 }]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:46}},plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#9aa',font:{size:10,weight:'600'},formatter:(v)=>(v/totMk*100).toFixed(0)+'%'}},scales:{x:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}, plugins:[ChartDataLabels]});
+
+    // Tabla inventario detallado
+    const grid={}; const materiales=Object.keys(MAT_NOMBRE);
+    materiales.forEach(m=>grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0});
+    stock.forEach(r=>{if(grid[r.material_code])grid[r.material_code][r.bodega]+=r.peso;});
+    const matsConStock = materiales.filter(m=>BODEGAS.reduce((a,b)=>a+grid[m][b],0)>0)
+                                   .sort((a,b)=>BODEGAS.reduce((x,bo)=>x+grid[b][bo],0)-BODEGAS.reduce((x,bo)=>x+grid[a][bo],0));
+    document.querySelector('#sTablaInv tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td><td>'+fmt(fila['Renca']/1000)+' t</td><td>'+fmt(fila['Maipú']/1000)+' t</td><td>'+fmt(fila['La Pintana']/1000)+' t</td><td>'+fmt(fila['Talcahuano']/1000)+' t</td><td style="font-weight:600;">'+fmt(tot/1000)+' t</td></tr>';}).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
+  } catch(e){ document.getElementById('s-kpis').innerHTML='<div class="loading">Error: '+e.message+'</div>'; console.error(e); }
+}
+
 async function initComercial() {
   try {
     const fb = p('c-bodega'), fm = p('c-material');
-    let qStock = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false';
+    let qStock = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false&anulado=neq.true';
     if (fb) qStock += '&bodega=eq.' + encodeURIComponent(fb);
     if (fm) qStock += '&material_code=eq.' + fm;
     const stock = await paginado(qStock);
     const hace30 = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
-    let qDesp = 'pesaje_data?select=peso,material_code&despachado=eq.true&timestamp=gte.' + hace30 + 'T00:00:00';
+    let qDesp = 'pesaje_data?select=peso,material_code&despachado=eq.true&anulado=neq.true&timestamp=gte.' + hace30 + 'T00:00:00';
     if (fb) qDesp += '&bodega=eq.' + encodeURIComponent(fb);
     if (fm) qDesp += '&material_code=eq.' + fm;
     const desp = await paginado(qDesp);
@@ -674,12 +814,33 @@ async function initComercial() {
     const pv={}; desp.forEach(r=>pv[r.material_code]=(pv[r.material_code]||0)+r.peso);
     const pvk=Object.keys(pv).sort((a,b)=>pv[b]-pv[a]);
     charts.cVolumen = new Chart(document.getElementById('cChartVolumen'), { type:'doughnut', data:{ labels:pvk.map(m=>MAT_NOMBRE[m]), datasets:[{ data:pvk.map(m=>pv[m]), backgroundColor:pvk.map(m=>COLORS[m]), borderColor:'#121614', borderWidth:2 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:12}}},cutout:'60%'}});
-    const grid={}; const materiales=['CU','AL','FE','PP','PA'];
+    const grid={}; const materiales=Object.keys(MAT_NOMBRE);
     materiales.forEach(m=>grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0});
     stock.forEach(r=>{if(grid[r.material_code])grid[r.material_code][r.bodega]+=r.peso;});
-    document.querySelector('#cTablaStock tbody').innerHTML = materiales.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td><td>'+fmt(fila['Renca']/1000)+' t</td><td>'+fmt(fila['Maipú']/1000)+' t</td><td>'+fmt(fila['La Pintana']/1000)+' t</td><td>'+fmt(fila['Talcahuano']/1000)+' t</td><td style="font-weight:600;">'+fmt(tot/1000)+' t</td></tr>';}).join('');
+    // Solo mostrar materiales que tienen stock (no las 28 filas siempre)
+    const matsConStock = materiales.filter(m=>BODEGAS.reduce((a,b)=>a+grid[m][b],0)>0)
+                                   .sort((a,b)=>BODEGAS.reduce((x,bo)=>x+grid[b][bo],0)-BODEGAS.reduce((x,bo)=>x+grid[a][bo],0));
+    document.querySelector('#cTablaStock tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td><td>'+fmt(fila['Renca']/1000)+' t</td><td>'+fmt(fila['Maipú']/1000)+' t</td><td>'+fmt(fila['La Pintana']/1000)+' t</td><td>'+fmt(fila['Talcahuano']/1000)+' t</td><td style="font-weight:600;">'+fmt(tot/1000)+' t</td></tr>';}).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
+
+    // Tabla de últimos despachos (desde la tabla despachos)
+    try {
+      let qUlt = 'despachos?select=folio,peso,material_code,destino,tipo_despacho,transportista,patente,timestamp&order=timestamp.desc&limit=30';
+      if (fm) qUlt += '&material_code=eq.' + fm;
+      const ultDesp = await paginado(qUlt);
+      document.querySelector('#cTablaDespachos tbody').innerHTML = ultDesp.length ? ultDesp.map(d=>{
+        return '<tr><td>'+fechaCorta(d.timestamp)+'</td><td>'+(d.destino||'—')+'</td><td>'+(d.tipo_despacho||'—')+'</td><td>'+(MAT_NOMBRE[d.material_code]||d.material_code||'—')+'</td><td>'+fmt(d.peso)+' kg</td><td>'+(d.transportista||'—')+'</td><td class="mono">'+(d.patente||'—')+'</td></tr>';
+      }).join('') : '<tr class="empty-row"><td colspan="7">Sin despachos</td></tr>';
+    } catch(e) { console.warn('Error tabla despachos:', e); }
   } catch(e){ document.getElementById('c-stock-fardos').textContent='Error: '+e.message; console.error(e); }
 }
+
+// Llenar el dropdown de material de Stock con los 28 materiales (desde MAT_NOMBRE)
+(function(){
+  const sel = document.getElementById('s-material');
+  if (sel) {
+    sel.innerHTML = '<option value="">Todos</option>' + Object.keys(MAT_NOMBRE).map(c=>`<option value="${c}">${MAT_NOMBRE[c]}</option>`).join('');
+  }
+})();
 
 initProduccion();
 </script>
