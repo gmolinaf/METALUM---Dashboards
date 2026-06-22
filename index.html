@@ -306,12 +306,11 @@ const URL_SB = 'https://zcjjgpamuszekiomygqz.supabase.co';
 const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjampncGFtdXN6ZWtpb215Z3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzA2NjYsImV4cCI6MjA5NjYwNjY2Nn0.3_WEmxpwPs6svbcrw1cS6C7Bc-N64PBoq9aoXxICwi4';
 const H = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
 const MAT_NOMBRE = {
-  TEN:'TENSE', UBC:'UBC', INX304:'AC INOX 304', PFB:'PERFIL B', TTCA:'TT COLOR A',
-  OFF:'OFFSET', TAB:'T. TABOR', PPN:'P. PINTADO', RAD:'RADIADOR', FLC:'FOIL COLOR',
-  FLB:'FOIL BCO.', PFA:'PERFIL A', INX316:'AC INOX 316', PAN:'P. ANODIZADO', TTCB:'TT COLOR B',
-  VIG:'VIGAS', PFC:'PERFIL C', CAB:'CABLE', CABGR:'CABLE C/GR', CABNG:'CABLE NG C/A',
-  CABZ:'CABLE C/Z', RADM:'RAD. MIXTO', AER:'AEROSOL/POM', BOB:'BOBINAS', LLA:'LLANTAS',
-  INXNI:'AC INOX NI', CPX:'COMPLEX', CPXN:'COMPLEX NES'
+  LATA:'LATAS', PPIN:'PERFIL PINTADO', LLAN:'LLANTAS', TENS:'TENSE', POMO:'POMO',
+  AC200:'ACERO 200', PFB:'PERFIL B', BLAN:'BLANDO', TTCB:'TT COLOR B', OFFS:'OFFSET',
+  RADI:'RADIADOR', PFA:'PERFIL A', INX316:'ACERO INOX 316', INX304:'ACERO INOX 304',
+  CPXN:'COMPLEX NESPRESSO', CHAT:'CHATARRA', PANO:'PERFIL ANODIZADO', FREM:'FOIL REMEDIO',
+  TTCA:'TT COLOR A', FCHO:'FOIL CHOC', FBAN:'FOIL BANDEJAS'
 };
 // Paleta de colores ciclica para los materiales (se asigna por orden)
 const PALETA = ['#C77B47','#7B97AD','#9B7B6B','#6B9B8A','#A89B6B','#B5835A','#8A9BAD','#A8857B',
@@ -322,9 +321,9 @@ const COLORS = {};
 Object.keys(MAT_NOMBRE).forEach((code, i) => { COLORS[code] = PALETA[i % PALETA.length]; });
 // Traduccion de codigo de maquina a nombre legible
 const MAQ_NOMBRE = {
-  'EVI':'EVI', 'EVII':'EVII', 'EVIII':'EVIII',
-  'BRIQ-1-2':'Briqueteadoras 1 y 2', 'BRIQ-CHINA':'Briqueteadora CHINA',
-  'CANDENSOR':'Candensor', 'CHATARRERA':'Chatarrera'
+  'V1':'Vertical 1', 'V2':'Vertical 2', 'V3':'Vertical 3',
+  'BRIQ12':'Briqueteadora 1 y 2', 'BRIQCH':'Briqueteadora China',
+  'PATIO':'PATIO', 'EXT':'EXTERNO'
 };
 const BODEGAS = ['Renca', 'Maipú', 'La Pintana', 'Talcahuano'];
 Chart.defaults.color = '#8B9591';
@@ -857,24 +856,34 @@ async function initStock() {
 
 // Inventario detallado (material × bodega) — cada celda con dato es clickeable
 function renderInventarioStock() {
-  const grid={}; const materiales=Object.keys(MAT_NOMBRE);
-  materiales.forEach(m=>grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0});
-  dataStock.forEach(r=>{if(grid[r.material_code])grid[r.material_code][r.bodega]+=r.peso;});
+  const grid={}; const cnt={}; const materiales=Object.keys(MAT_NOMBRE);
+  materiales.forEach(m=>{
+    grid[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0};
+    cnt[m]={Renca:0,'Maipú':0,'La Pintana':0,Talcahuano:0};
+  });
+  dataStock.forEach(r=>{
+    if(grid[r.material_code]){ grid[r.material_code][r.bodega]+=r.peso; cnt[r.material_code][r.bodega]+=1; }
+  });
   const matsConStock = materiales.filter(m=>BODEGAS.reduce((a,b)=>a+grid[m][b],0)>0)
                                  .sort((a,b)=>BODEGAS.reduce((x,bo)=>x+grid[b][bo],0)-BODEGAS.reduce((x,bo)=>x+grid[a][bo],0));
-  const celda = (m, bod, val) => {
+  // Cada celda muestra toneladas (grande) + cantidad de fardos (chico debajo)
+  const celda = (m, bod) => {
+    const val = grid[m][bod], fardos = cnt[m][bod];
     if (val <= 0) return '<td style="color:#444;">—</td>';
     const activo = filtroInvStock && filtroInvStock.material===m && filtroInvStock.bodega===bod;
-    return '<td style="cursor:pointer;' + (activo?'background:#2a2410;color:#F59E0B;font-weight:700;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'' + bod + '\')">' + fmt(val/1000) + ' t</td>';
+    return '<td style="cursor:pointer;' + (activo?'background:#2a2410;color:#F59E0B;font-weight:700;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'' + bod + '\')">' +
+      fmt(val/1000) + ' t<br><span style="font-size:11px;color:#888;">' + fardos + ' fds</span></td>';
   };
   const filaTotal = (m) => {
     const tot = BODEGAS.reduce((a,b)=>a+grid[m][b],0);
+    const totFardos = BODEGAS.reduce((a,b)=>a+cnt[m][b],0);
     const activo = filtroInvStock && filtroInvStock.material===m && !filtroInvStock.bodega;
-    return '<td style="cursor:pointer;font-weight:600;' + (activo?'background:#2a2410;color:#F59E0B;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'\')">' + fmt(tot/1000) + ' t</td>';
+    return '<td style="cursor:pointer;font-weight:600;' + (activo?'background:#2a2410;color:#F59E0B;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'\')">' +
+      fmt(tot/1000) + ' t<br><span style="font-size:11px;color:#aaa;font-weight:600;">' + totFardos + ' fds</span></td>';
   };
   document.querySelector('#sTablaInv tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>
     '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td>' +
-    celda(m,'Renca',grid[m]['Renca']) + celda(m,'Maipú',grid[m]['Maipú']) + celda(m,'La Pintana',grid[m]['La Pintana']) + celda(m,'Talcahuano',grid[m]['Talcahuano']) +
+    celda(m,'Renca') + celda(m,'Maipú') + celda(m,'La Pintana') + celda(m,'Talcahuano') +
     filaTotal(m) + '</tr>'
   ).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
 }
