@@ -392,6 +392,8 @@ async function paginado(q) {
   return all;
 }
 function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
+// Toneladas con 3 decimales (recibe kilos, devuelve toneladas formateadas)
+function fmtTon(kg) { return (kg/1000).toLocaleString('es-CL', {minimumFractionDigits:3, maximumFractionDigits:3}); }
 function destruirCharts(prefix) { Object.keys(charts).forEach(k => { if (k.startsWith(prefix)) { charts[k].destroy(); delete charts[k]; } }); }
 function p(id){ return document.getElementById(id).value; }
 function fechaCorta(ts) { if(!ts) return '—'; const dt = new Date(ts); if(isNaN(dt.getTime())) return '—'; return dt.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + dt.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}); }
@@ -529,10 +531,10 @@ function renderGraficosProduccion(dataGraficos, dataKpi) {
     return '<span style="color:' + color + ';">' + flecha + ' ' + Math.abs(pct).toFixed(0) + '%</span>';
   };
   document.getElementById('p-kpis').innerHTML =
-    '<div class="kpi green"><div class="kpi-label">Producción total</div><div class="kpi-value">' + fmt(totKilos/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(totFardos) + ' fardos</div></div>' +
-    '<div class="kpi green"><div class="kpi-label">Hoy</div><div class="kpi-value">' + fmt(kgHoy/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs ayer ' + variacion(kgHoy, kgAyer) + '</div></div>' +
-    '<div class="kpi green"><div class="kpi-label">Últimos 7 días</div><div class="kpi-value">' + fmt(kgSem/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs semana previa ' + variacion(kgSem, kgSemPrev) + '</div></div>' +
-    '<div class="kpi green"><div class="kpi-label">Material principal</div><div class="kpi-value" style="font-size:24px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmt(matTop[1]/1000)+' ton':'') + '</div></div>';
+    '<div class="kpi green"><div class="kpi-label">Producción total</div><div class="kpi-value">' + fmtTon(totKilos) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(totFardos) + ' fardos</div></div>' +
+    '<div class="kpi green"><div class="kpi-label">Hoy</div><div class="kpi-value">' + fmtTon(kgHoy) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs ayer ' + variacion(kgHoy, kgAyer) + '</div></div>' +
+    '<div class="kpi green"><div class="kpi-label">Últimos 7 días</div><div class="kpi-value">' + fmtTon(kgSem) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">vs semana previa ' + variacion(kgSem, kgSemPrev) + '</div></div>' +
+    '<div class="kpi green"><div class="kpi-label">Material principal</div><div class="kpi-value" style="font-size:24px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmtTon(matTop[1])+' ton':'') + '</div></div>';
 
   // Línea de tiempo (usa data totalmente filtrada para reflejar la selección)
   const porDia = {}; dataKpi.forEach(r=>{if(!r.timestamp)return;const d=r.timestamp.split('T')[0];porDia[d]=(porDia[d]||0)+r.peso;});
@@ -570,7 +572,7 @@ function renderGraficosProduccion(dataGraficos, dataKpi) {
   const po={}; dataOp.forEach(r=>{if(!po[r.operador])po[r.operador]={f:0,k:0};po[r.operador].f++;po[r.operador].k+=r.peso;});
   const ops=Object.entries(po).sort((a,b)=>b[1].k-a[1].k);
   const maxK=ops.length?ops[0][1].k:1;
-  document.querySelector('#pTablaOp tbody').innerHTML = ops.length ? ops.map((e,i)=>{const n=e[0],d=e[1];const pr=Math.round(d.k/d.f);const pc=(d.k/maxK*100).toFixed(0);return '<tr><td><span class="rank ' + (i===0?'gold':'') + '">' + (i+1) + '</span>' + n + '</td><td>' + fmt(d.f) + '</td><td>' + fmt(d.k/1000) + ' t</td><td><div style="display:flex;align-items:center;gap:8px;"><div class="bar-mini" style="width:' + pc + '%;max-width:50px;"></div><span style="font-size:12px;color:var(--text3);">' + fmt(pr) + '</span></div></td></tr>';}).join('') : '<tr class="empty-row"><td colspan="4">Sin datos</td></tr>';
+  document.querySelector('#pTablaOp tbody').innerHTML = ops.length ? ops.map((e,i)=>{const n=e[0],d=e[1];const pr=Math.round(d.k/d.f);const pc=(d.k/maxK*100).toFixed(0);return '<tr><td><span class="rank ' + (i===0?'gold':'') + '">' + (i+1) + '</span>' + n + '</td><td>' + fmt(d.f) + '</td><td>' + fmtTon(d.k) + ' t</td><td><div style="display:flex;align-items:center;gap:8px;"><div class="bar-mini" style="width:' + pc + '%;max-width:50px;"></div><span style="font-size:12px;color:var(--text3);">' + fmt(pr) + '</span></div></td></tr>';}).join('') : '<tr class="empty-row"><td colspan="4">Sin datos</td></tr>';
 }
 async function initProduccion() {
   try {
@@ -678,7 +680,7 @@ function renderTablaDespachos() {
         '<td>' + d.transportista + '</td>' +
         '<td><span class="badge ' + bc + '">' + d.tipo_despacho + '</span></td>' +
         '<td>' + d.fardos + '</td>' +
-        '<td>' + fmt(d.kilos/1000) + ' t</td>' +
+        '<td>' + fmtTon(d.kilos) + ' t</td>' +
         '<td>' + fechaCorta(d.timestamp) + '</td></tr>';
     }).join('');
   }
@@ -776,9 +778,9 @@ function renderGraficosOperaciones(desp) {
   const diasProm = conDato ? (sumaDias/conDato) : 0;
 
   document.getElementById('o-kpis').innerHTML =
-    '<div class="kpi blue"><div class="kpi-label">Despachado total</div><div class="kpi-value">' + fmt(kgD/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(desp.length) + ' fardos</div></div>' +
+    '<div class="kpi blue"><div class="kpi-label">Despachado total</div><div class="kpi-value">' + fmtTon(kgD) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(desp.length) + ' fardos</div></div>' +
     '<div class="kpi blue"><div class="kpi-label">Nº despachos</div><div class="kpi-value">' + fmt(containers) + '</div><div class="kpi-sub">camiones / containers</div></div>' +
-    '<div class="kpi blue"><div class="kpi-label">Promedio por despacho</div><div class="kpi-value">' + fmt(promPorDespacho/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">kg por camión</div></div>' +
+    '<div class="kpi blue"><div class="kpi-label">Promedio por despacho</div><div class="kpi-value">' + fmtTon(promPorDespacho) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">kg por camión</div></div>' +
     '<div class="kpi purple"><div class="kpi-label">Días prod→despacho</div><div class="kpi-value">' + (diasProm ? diasProm.toFixed(1) : '—') + '<span class="kpi-unit">días</span></div><div class="kpi-sub">tiempo en bodega</div></div>';
 
   // Línea SOLO de despachos (responde a los filtros de arriba)
@@ -843,9 +845,9 @@ async function initStock() {
     const nMats = Object.keys(porMat).length;
 
     document.getElementById('s-kpis').innerHTML =
-      '<div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">' + fmt(kgTotal/1000) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(dataStock.length) + ' fardos</div></div>' +
-      '<div class="kpi amber"><div class="kpi-label">Material con más stock</div><div class="kpi-value" style="font-size:22px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmt(matTop[1]/1000)+' ton':'') + '</div></div>' +
-      '<div class="kpi amber"><div class="kpi-label">Bodega con más stock</div><div class="kpi-value" style="font-size:22px;">' + (bodTop?bodTop[0]:'—') + '</div><div class="kpi-sub">' + (bodTop?fmt(bodTop[1]/1000)+' ton':'') + '</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Stock disponible</div><div class="kpi-value">' + fmtTon(kgTotal) + '<span class="kpi-unit">ton</span></div><div class="kpi-sub">' + fmt(dataStock.length) + ' fardos</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Material con más stock</div><div class="kpi-value" style="font-size:22px;">' + (matTop?MAT_NOMBRE[matTop[0]]:'—') + '</div><div class="kpi-sub">' + (matTop?fmtTon(matTop[1])+' ton':'') + '</div></div>' +
+      '<div class="kpi amber"><div class="kpi-label">Bodega con más stock</div><div class="kpi-value" style="font-size:22px;">' + (bodTop?bodTop[0]:'—') + '</div><div class="kpi-sub">' + (bodTop?fmtTon(bodTop[1])+' ton':'') + '</div></div>' +
       '<div class="kpi amber"><div class="kpi-label">Variedad en stock</div><div class="kpi-value">' + nMats + '<span class="kpi-unit">mat.</span></div><div class="kpi-sub">tipos distintos</div></div>';
 
     renderInventarioStock();
@@ -872,14 +874,14 @@ function renderInventarioStock() {
     if (val <= 0) return '<td style="color:#444;">—</td>';
     const activo = filtroInvStock && filtroInvStock.material===m && filtroInvStock.bodega===bod;
     return '<td style="cursor:pointer;' + (activo?'background:#2a2410;color:#F59E0B;font-weight:700;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'' + bod + '\')">' +
-      fmt(val/1000) + ' t<br><span style="font-size:11px;color:#888;">' + fardos + ' fds</span></td>';
+      fmtTon(val) + ' t<br><span style="font-size:11px;color:#888;">' + fardos + ' fds</span></td>';
   };
   const filaTotal = (m) => {
     const tot = BODEGAS.reduce((a,b)=>a+grid[m][b],0);
     const totFardos = BODEGAS.reduce((a,b)=>a+cnt[m][b],0);
     const activo = filtroInvStock && filtroInvStock.material===m && !filtroInvStock.bodega;
     return '<td style="cursor:pointer;font-weight:600;' + (activo?'background:#2a2410;color:#F59E0B;':'') + '" onclick="filtrarPorInventario(\'' + m + '\',\'\')">' +
-      fmt(tot/1000) + ' t<br><span style="font-size:11px;color:#aaa;font-weight:600;">' + totFardos + ' fds</span></td>';
+      fmtTon(tot) + ' t<br><span style="font-size:11px;color:#aaa;font-weight:600;">' + totFardos + ' fds</span></td>';
   };
   document.querySelector('#sTablaInv tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>
     '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td>' +
@@ -965,13 +967,13 @@ async function initComercial() {
     if (fm) qDesp += '&material_code=eq.' + fm;
     const desp = await paginado(qDesp);
     const kg = stock.reduce((a,r)=>a+r.peso,0);
-    document.getElementById('c-stock-total').innerHTML = fmt(kg/1000)+'<span> ton</span>';
+    document.getElementById('c-stock-total').innerHTML = fmtTon(kg)+'<span> ton</span>';
     document.getElementById('c-stock-fardos').textContent = fmt(stock.length)+' fardos disponibles' + (fb?' en '+fb:'');
     document.getElementById('c-update').textContent = 'Actualizado '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
     const pm={}; stock.forEach(r=>{if(!pm[r.material_code])pm[r.material_code]={kg:0,f:0};pm[r.material_code].kg+=r.peso;pm[r.material_code].f++;});
     const totK=Object.values(pm).reduce((a,m)=>a+m.kg,0)||1;
     const mats=Object.keys(pm).sort((a,b)=>pm[b].kg-pm[a].kg);
-    document.getElementById('c-cards').innerHTML = mats.length ? mats.map(m=>{const pc=(pm[m].kg/totK*100).toFixed(0);return '<div class="mat-card"><div class="dot" style="background:'+COLORS[m]+'"></div><div class="name">'+MAT_NOMBRE[m]+'</div><div class="kg">'+fmt(pm[m].kg/1000)+'<span> ton</span></div><div class="fardos">'+fmt(pm[m].f)+' fardos · '+pc+'%</div><div class="pct-bar"><div class="pct-fill" style="width:'+pc+'%;background:'+COLORS[m]+'"></div></div></div>';}).join('') : '<div class="loading">Sin stock para este filtro</div>';
+    document.getElementById('c-cards').innerHTML = mats.length ? mats.map(m=>{const pc=(pm[m].kg/totK*100).toFixed(0);return '<div class="mat-card"><div class="dot" style="background:'+COLORS[m]+'"></div><div class="name">'+MAT_NOMBRE[m]+'</div><div class="kg">'+fmtTon(pm[m].kg)+'<span> ton</span></div><div class="fardos">'+fmt(pm[m].f)+' fardos · '+pc+'%</div><div class="pct-bar"><div class="pct-fill" style="width:'+pc+'%;background:'+COLORS[m]+'"></div></div></div>';}).join('') : '<div class="loading">Sin stock para este filtro</div>';
     destruirCharts('c');
     const sb={}; BODEGAS.forEach(b=>sb[b]=0); stock.forEach(r=>sb[r.bodega]=(sb[r.bodega]||0)+r.peso);
     charts.cBodega = new Chart(document.getElementById('cChartBodega'), { type:'bar', data:{ labels:BODEGAS, datasets:[{ data:BODEGAS.map(b=>sb[b]), backgroundColor:'#D4AF37', borderRadius:6, barThickness:44 }]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1a1f1d'},ticks:{callback:v=>(v/1000).toFixed(0)+'k'}}}}});
@@ -984,7 +986,7 @@ async function initComercial() {
     // Solo mostrar materiales que tienen stock (no las 28 filas siempre)
     const matsConStock = materiales.filter(m=>BODEGAS.reduce((a,b)=>a+grid[m][b],0)>0)
                                    .sort((a,b)=>BODEGAS.reduce((x,bo)=>x+grid[b][bo],0)-BODEGAS.reduce((x,bo)=>x+grid[a][bo],0));
-    document.querySelector('#cTablaStock tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td><td>'+fmt(fila['Renca']/1000)+' t</td><td>'+fmt(fila['Maipú']/1000)+' t</td><td>'+fmt(fila['La Pintana']/1000)+' t</td><td>'+fmt(fila['Talcahuano']/1000)+' t</td><td style="font-weight:600;">'+fmt(tot/1000)+' t</td></tr>';}).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
+    document.querySelector('#cTablaStock tbody').innerHTML = matsConStock.length ? matsConStock.map(m=>{const fila=grid[m];const tot=BODEGAS.reduce((a,b)=>a+fila[b],0);return '<tr><td><span class="mat-tag"><span class="d" style="background:'+COLORS[m]+'"></span>'+MAT_NOMBRE[m]+'</span></td><td>'+fmtTon(fila['Renca'])+' t</td><td>'+fmtTon(fila['Maipú'])+' t</td><td>'+fmtTon(fila['La Pintana'])+' t</td><td>'+fmtTon(fila['Talcahuano'])+' t</td><td style="font-weight:600;">'+fmtTon(tot)+' t</td></tr>';}).join('') : '<tr class="empty-row"><td colspan="6">Sin stock</td></tr>';
 
     // Tabla de últimos despachos (desde la tabla despachos)
     try {
