@@ -306,11 +306,11 @@ const URL_SB = 'https://zcjjgpamuszekiomygqz.supabase.co';
 const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjampncGFtdXN6ZWtpb215Z3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzA2NjYsImV4cCI6MjA5NjYwNjY2Nn0.3_WEmxpwPs6svbcrw1cS6C7Bc-N64PBoq9aoXxICwi4';
 const H = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
 const MAT_NOMBRE = {
-  LATA:'LATAS', PPIN:'PERFIL PINTADO', LLAN:'LLANTAS', TENS:'TENSE', POMO:'POMO',
-  AC200:'ACERO 200', PFB:'PERFIL B', BLAN:'BLANDO', TTCB:'TT COLOR B', OFFS:'OFFSET',
-  RADI:'RADIADOR', PFA:'PERFIL A', INX316:'ACERO INOX 316', INX304:'ACERO INOX 304',
-  CPXN:'COMPLEX NESPRESSO', CHAT:'CHATARRA', PANO:'PERFIL ANODIZADO', FREM:'FOIL REMEDIO',
-  TTCA:'TT COLOR A', FCHO:'FOIL CHOC', FBAN:'FOIL BANDEJAS'
+  LATA:'LATAS', LBCH:'LATAS BALL CHILE', PERF:'PERFIL', TENS:'TENSE', OFFS:'OFFSET',
+  PIST:'PISTONES', LLAN:'LLANTAS', POMO:'POMO', BLAN:'BLANDO', TTCO:'TT COLOR',
+  CPXN:'COMPLEX NESPRESSO', CPXU:'COMPLEX UNISAN', CPX:'COMPLEX', RADI:'RADIADOR', FOIL:'FOIL',
+  INX304:'ACERO INOX 304', AC200:'ACERO 200', INX316:'ACERO INOX 316', PLAE:'PLANCHAS AEROPUERTO',
+  HOJA:'HOJALATA', CABL:'CABLE', CHAT:'CHATARRA'
 };
 // Paleta de colores ciclica para los materiales (se asigna por orden)
 const PALETA = ['#C77B47','#7B97AD','#9B7B6B','#6B9B8A','#A89B6B','#B5835A','#8A9BAD','#A8857B',
@@ -389,8 +389,44 @@ async function paginado(q) {
     if (d.length < 1000) hayMas = false; else offset += 1000;
   }
   all.forEach(r => { if (r.peso !== undefined) r.peso = Number(r.peso) || 0; });
+  combinarSubclasificacion(all);
   return all;
 }
+
+// Combina material_code + subclasificación en una sola clave (material/sub),
+// para que el dashboard muestre PERFIL A, PERFIL B, LATAS METALUM, etc. por separado.
+// Registra el nombre y color de cada combinación que aparezca.
+function combinarSubclasificacion(rows) {
+  rows.forEach(r => {
+    const base = r.material_code;
+    if (!base) return;
+    const sub = (r.subclasificacion || '').trim();
+    if (sub) {
+      const comb = base + '/' + sub;
+      r.material_code = comb;  // reemplaza para que todo el código lo use combinado
+      // Registrar nombre legible: "NOMBRE_PADRE SUB" (ej: "PERFIL A")
+      if (!MAT_NOMBRE[comb]) {
+        const nombrePadre = MAT_NOMBRE[base] || base;
+        MAT_NOMBRE[comb] = nombrePadre + ' ' + sub;
+      }
+      // Registrar color (deriva del padre, con leve variación por índice)
+      if (!COLORS[comb]) {
+        COLORS[comb] = COLORS[base] || PALETA[Object.keys(COLORS).length % PALETA.length];
+      }
+    }
+  });
+}
+// Construye el filtro de Supabase para un material que puede ser combinado (PERF/A).
+// Lo separa en material_code y subclasificacion para la consulta.
+function filtroMaterial(mat) {
+  if (!mat) return '';
+  if (mat.includes('/')) {
+    const [code, sub] = mat.split('/');
+    return '&material_code=eq.' + code + '&subclasificacion=eq.' + encodeURIComponent(sub);
+  }
+  return '&material_code=eq.' + mat;
+}
+
 function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
 // Toneladas con 3 decimales (recibe kilos, devuelve toneladas formateadas)
 function fmtTon(kg) { return (kg/1000).toLocaleString('es-CL', {minimumFractionDigits:3, maximumFractionDigits:3}); }
@@ -434,13 +470,13 @@ function toggleAnulados() {
   aplicarProduccion();  // recargar la tabla con/sin anulados
 }
 async function cargarProduccion(f = {}) {
-  let q = 'pesaje_data?select=folio,peso,material_code,bodega,operador,maquina,turno,timestamp,anulado&order=timestamp.desc';
+  let q = 'pesaje_data?select=folio,peso,material_code,subclasificacion,bodega,operador,maquina,turno,timestamp,anulado&order=timestamp.desc';
   // Por default ocultar anulados (como si no existieran). Solo se muestran si se activa el toggle.
   if (!mostrarAnulados) q += '&anulado=neq.true';
   if (f.desde) q += '&timestamp=gte.' + f.desde + 'T00:00:00';
   if (f.hasta) q += '&timestamp=lte.' + f.hasta + 'T23:59:59';
   if (f.bodega) q += '&bodega=eq.' + encodeURIComponent(f.bodega);
-  if (f.material) q += '&material_code=eq.' + f.material;
+  if (f.material) q += filtroMaterial(f.material);
   if (f.operador) q += '&operador=eq.' + encodeURIComponent(f.operador);
   if (f.maquina) q += '&maquina=eq.' + f.maquina;
   if (f.turno) q += '&turno=eq.' + f.turno;
@@ -606,11 +642,11 @@ let seleccionDespachos = new Set(); // containers seleccionados
 let seleccionFardos = new Set();    // folios individuales seleccionados (tabla 2)
 
 async function cargarOpDespachos(f = {}) {
-  let q = 'despachos?select=id,folio,peso,material_code,origen,destino,tipo_despacho,patente,transportista,codigo_container,timestamp&order=timestamp.desc';
+  let q = 'despachos?select=id,folio,peso,material_code,subclasificacion,origen,destino,tipo_despacho,patente,transportista,codigo_container,timestamp&order=timestamp.desc';
   if (f.desde) q += '&timestamp=gte.' + f.desde + 'T00:00:00';
   if (f.hasta) q += '&timestamp=lte.' + f.hasta + 'T23:59:59';
   if (f.bodega) q += '&origen=eq.' + encodeURIComponent(f.bodega);
-  if (f.material) q += '&material_code=eq.' + f.material;
+  if (f.material) q += filtroMaterial(f.material);
   if (f.tipo) q += '&tipo_despacho=eq.' + f.tipo;
   return paginado(q);
 }
@@ -619,13 +655,13 @@ async function cargarOpProduccion(f = {}) {
   if (f.desde) q += '&timestamp=gte.' + f.desde + 'T00:00:00';
   if (f.hasta) q += '&timestamp=lte.' + f.hasta + 'T23:59:59';
   if (f.bodega) q += '&bodega=eq.' + encodeURIComponent(f.bodega);
-  if (f.material) q += '&material_code=eq.' + f.material;
+  if (f.material) q += filtroMaterial(f.material);
   return paginado(q);
 }
 async function cargarOpStock(f = {}) {
-  let q = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false&anulado=neq.true';
+  let q = 'pesaje_data?select=peso,material_code,subclasificacion,bodega&despachado=eq.false&anulado=neq.true';
   if (f.bodega) q += '&bodega=eq.' + encodeURIComponent(f.bodega);
-  if (f.material) q += '&material_code=eq.' + f.material;
+  if (f.material) q += filtroMaterial(f.material);
   return paginado(q);
 }
 
@@ -829,10 +865,11 @@ async function initStock() {
   const p = id => document.getElementById(id).value;
   try {
     const fb = p('s-bodega'), fm = p('s-material');
-    let q = 'pesaje_data?select=folio,peso,material_code,bodega,timestamp&despachado=eq.false&anulado=neq.true&order=id.desc';
+    let q = 'pesaje_data?select=folio,peso,material_code,subclasificacion,bodega,timestamp&despachado=eq.false&anulado=neq.true&order=id.desc';
     if (fb) q += '&bodega=eq.' + encodeURIComponent(fb);
-    if (fm) q += '&material_code=eq.' + fm;
+    if (fm) q += filtroMaterial(fm);
     dataStock = await paginado(q);
+    llenarDropdownStock();
     filtroInvStock = null;
     filtradosStock = dataStock.slice();
     document.getElementById('s-search').value = '';
@@ -957,14 +994,14 @@ function renderGraficosStock() {
 async function initComercial() {
   try {
     const fb = p('c-bodega'), fm = p('c-material');
-    let qStock = 'pesaje_data?select=peso,material_code,bodega&despachado=eq.false&anulado=neq.true';
+    let qStock = 'pesaje_data?select=peso,material_code,subclasificacion,bodega&despachado=eq.false&anulado=neq.true';
     if (fb) qStock += '&bodega=eq.' + encodeURIComponent(fb);
-    if (fm) qStock += '&material_code=eq.' + fm;
+    if (fm) qStock += filtroMaterial(fm);
     const stock = await paginado(qStock);
     const hace30 = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
-    let qDesp = 'pesaje_data?select=peso,material_code&despachado=eq.true&anulado=neq.true&timestamp=gte.' + hace30 + 'T00:00:00';
+    let qDesp = 'pesaje_data?select=peso,material_code,subclasificacion&despachado=eq.true&anulado=neq.true&timestamp=gte.' + hace30 + 'T00:00:00';
     if (fb) qDesp += '&bodega=eq.' + encodeURIComponent(fb);
-    if (fm) qDesp += '&material_code=eq.' + fm;
+    if (fm) qDesp += filtroMaterial(fm);
     const desp = await paginado(qDesp);
     const kg = stock.reduce((a,r)=>a+r.peso,0);
     document.getElementById('c-stock-total').innerHTML = fmtTon(kg)+'<span> ton</span>';
@@ -990,8 +1027,8 @@ async function initComercial() {
 
     // Tabla de últimos despachos (desde la tabla despachos)
     try {
-      let qUlt = 'despachos?select=folio,peso,material_code,destino,tipo_despacho,transportista,patente,timestamp&order=timestamp.desc&limit=30';
-      if (fm) qUlt += '&material_code=eq.' + fm;
+      let qUlt = 'despachos?select=folio,peso,material_code,subclasificacion,destino,tipo_despacho,transportista,patente,timestamp&order=timestamp.desc&limit=30';
+      if (fm) qUlt += filtroMaterial(fm);
       const ultDesp = await paginado(qUlt);
       document.querySelector('#cTablaDespachos tbody').innerHTML = ultDesp.length ? ultDesp.map(d=>{
         return '<tr><td>'+fechaCorta(d.timestamp)+'</td><td>'+(d.destino||'—')+'</td><td>'+(d.tipo_despacho||'—')+'</td><td>'+(MAT_NOMBRE[d.material_code]||d.material_code||'—')+'</td><td>'+fmt(d.peso)+' kg</td><td>'+(d.transportista||'—')+'</td><td class="mono">'+(d.patente||'—')+'</td></tr>';
@@ -1000,13 +1037,19 @@ async function initComercial() {
   } catch(e){ document.getElementById('c-stock-fardos').textContent='Error: '+e.message; console.error(e); }
 }
 
-// Llenar el dropdown de material de Stock con los 28 materiales (desde MAT_NOMBRE)
-(function(){
+// Llenar el dropdown de material de Stock. Se llama después de cargar datos
+// para incluir las combinaciones (PERFIL A, LATAS METALUM) que existan.
+function llenarDropdownStock() {
   const sel = document.getElementById('s-material');
-  if (sel) {
-    sel.innerHTML = '<option value="">Todos</option>' + Object.keys(MAT_NOMBRE).map(c=>`<option value="${c}">${MAT_NOMBRE[c]}</option>`).join('');
-  }
-})();
+  if (!sel) return;
+  const seleccionActual = sel.value;
+  // Materiales que aparecen en el stock cargado, ordenados por nombre
+  const codigos = [...new Set((dataStock||[]).map(r=>r.material_code))].filter(Boolean)
+    .sort((a,b)=>(MAT_NOMBRE[a]||a).localeCompare(MAT_NOMBRE[b]||b));
+  sel.innerHTML = '<option value="">Todos</option>' +
+    codigos.map(c=>`<option value="${c}">${MAT_NOMBRE[c]||c}</option>`).join('');
+  if (seleccionActual) sel.value = seleccionActual;
+}
 
 initProduccion();
 </script>
